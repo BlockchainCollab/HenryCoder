@@ -1,0 +1,29 @@
+// Struct must be defined outside contract
+struct Todo {
+  mut text: ByteVec,
+  mut completed: Bool
+}
+
+Contract ContractWithList(mut todosLength: U256) {
+  // Ralph doesn't have a built-in array type, but we can use a mapping to simulate an array.
+  // The mapping key is the index of the todo item.
+  mapping[U256, Todo] todos
+
+  @using(checkExternalCaller = false, updateFields = true)
+  pub fn create(text: ByteVec) -> () {
+    todos.insert!(todosLength, Todo { text: text, completed: false })
+    todosLength = todosLength + 1
+  }
+
+  pub fn get(index: U256) -> Todo {
+    // Only show below code if mimic solidity defaults is set to true:
+    // >>>>>
+    if (!todos.contains!(index)) {
+      // The default value of a struct is all fields set to 0 or false
+      return Todo { text: #, completed: false }
+    }
+    // <<<<<
+    return todos[index]
+  }
+}
+

@@ -1,0 +1,57 @@
+{
+  "fullNodeVersion": "v3.14.0",
+  "compilerOptionsUsed": {
+    "ignoreUnusedConstantsWarnings": false,
+    "ignoreUnusedVariablesWarnings": false,
+    "ignoreUnusedFieldsWarnings": false,
+    "ignoreUnusedPrivateFunctionsWarnings": false,
+    "ignoreUpdateFieldsCheckWarnings": false,
+    "ignoreCheckExternalCallerWarnings": false,
+    "ignoreUnusedFunctionReturnWarnings": false,
+    "skipAbstractContractCheck": false
+  },
+  "infos": {
+    "Book": {
+      "sourceFile": "structs.ral",
+      "sourceCodeHash": "eeafbd4ef40f2c0880df1732782c2a5540cf1b0a216fecea5d4053a0518781e9",
+      "bytecodeDebugPatch": "",
+      "codeHashDebug": ""
+    },
+    "BookShelf": {
+      "sourceFile": "structs.ral",
+      "sourceCodeHash": "eeafbd4ef40f2c0880df1732782c2a5540cf1b0a216fecea5d4053a0518781e9",
+      "bytecodeDebugPatch": "=10+d=1-1=265-1+2=84+7a7e0214696e73657274206174206d617020706174683a2000=40",
+      "codeHashDebug": "a83b467c242f8a70b08e37c61e3d052969e4da7a9bdb82a8804061ffbcad9040"
+    },
+    "Counters": {
+      "sourceFile": "counters.ral",
+      "sourceCodeHash": "689174357901311f594d0522801748969262063803945c290e4cab6f223a9c61",
+      "bytecodeDebugPatch": "=6-2+44=2-2+84=2-2+e1=2-2+fe=10-2+11=64+7a7e0214696e73657274206174206d617020706174683a2000=149-1+c=112+7a7e021472656d6f7665206174206d617020706174683a2000=70",
+      "codeHashDebug": "b3a0fc6c4abd4ccb2d8873781f65988af656899df2415decc79afd8cd760facc"
+    },
+    "IFungibleToken": {
+      "sourceFile": "../../../../.npm/_npx/aab58dd8e92291b6/node_modules/@alephium/web3/std/fungible_token_interface.ral",
+      "sourceCodeHash": "62910bf11e1eeb6cb2fd468626ff606a9b06306b2b81590c3b10f6deb5966bde",
+      "bytecodeDebugPatch": "",
+      "codeHashDebug": ""
+    },
+    "Loop": {
+      "sourceFile": "loop.ral",
+      "sourceCodeHash": "c8f670243ac9c052012bbd621ba1651295a9d8f7b5e1b73102bf8c160e8369fa",
+      "bytecodeDebugPatch": "",
+      "codeHashDebug": "33b44843a3c515de149e79a0e6d9f7ad188fa86c36bf12e1eec0414da816b3a6"
+    },
+    "TokenFaucet": {
+      "sourceFile": "token.ral",
+      "sourceCodeHash": "047696520b37c4daf49781491e7d26ec31cbf5dbef3dfaa2277c7d29f11f1ae2",
+      "bytecodeDebugPatch": "=20-2+71=111-1+4=10+a0007e02175468652063757272656e742062616c616e63652069732000=46",
+      "codeHashDebug": "06b49f3673daa80e1a2452f6478c177652dd9b9a5730be557aa9dd6dda347152"
+    },
+    "Withdraw": {
+      "sourceFile": "withdraw.ral",
+      "sourceCodeHash": "52423580f02f5aab7050bfb9a14b497ea4bdcb10b3444483650f3dad8e0e5330",
+      "bytecodeDebugPatch": "",
+      "codeHashDebug": ""
+    }
+  }
+}

@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-base text-gray-300 font-sans; /* Apply Montserrat globally */
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply text-primary font-semibold; /* Ensure headings also use the font */
+}
+
+/* Example of using accent color for borders or other elements */
+.accent-border {
+  @apply border-accent;
+}
+
+/* Custom gradient text */
+.text-gradient-neon {
+  @apply text-transparent bg-clip-text bg-gradient-to-r from-neon-pink to-neon-blue;
+}

@@ -1,0 +1,80 @@
+// Ralph doesn't have built-in dynamic arrays, so we'll use mappings to simulate them
+Contract Array(
+    mut initialized: Bool,
+    mut arrLength: U256,
+    mut arr2Length: U256,
+    mut myFixedSizeArr: [U256; 10]
+) {
+    // Dynamic array simulation using mapping
+    mapping[U256, U256] arr
+    // Initialize arr2 with [1, 2, 3]
+    mapping[U256, U256] arr2
+
+    // Initialize arr2 in constructor equivalent
+    @using(updateFields = true, checkExternalCaller = false)
+    pub fn init() -> () {
+        arr2.insert!(0, 1)
+        arr2.insert!(1, 2)
+        arr2.insert!(2, 3)
+        arr2Length = 3
+        initialized = true
+    }
+
+    @using(updateFields = true, checkExternalCaller = false)
+    pub fn setFixed(index: U256, value: U256) -> () {
+        // Set value in fixed size array
+        myFixedSizeArr[index] = value
+    }
+
+    pub fn get(i: U256) -> U256 {
+        // Only show below code if mimic solidity defaults is set to true:
+        // >>>>>
+        if (!arr.contains!(i)) {
+            return 0
+        }
+        // <<<<<
+        return arr[i]
+    }
+
+    // In Ralph we can't return entire mapping, so this function is not directly translatable
+    // Users would need to call get() for each index they want to access
+    // pub fn getArr() -> [U256] {
+    //     Not possible in Ralph
+    // }
+
+    @using(updateFields = true, checkExternalCaller = false)
+    pub fn push(i: U256) -> () {
+        arr.insert!(arrLength, i)
+        arrLength = arrLength + 1
+    }
+
+    @using(updateFields = true, checkExternalCaller = false)
+    pub fn pop() -> () {
+        arrLength = arrLength - 1
+        arr.remove!(arrLength)
+    }
+
+    pub fn getLength() -> U256 {
+        return arrLength
+    }
+
+    @using(updateFields = true, checkExternalCaller = false)
+    pub fn remove(index: U256) -> () {
+        if (index >= arrLength) {
+            panic!()
+        }
+        arr.remove!(index)
+    }
+
+    // Memory array examples can't be directly translated since Ralph doesn't have memory arrays
+    // The closest would be to use fixed size arrays
+    pub fn examples() -> U256 {
+        // Fixed size array in Ralph
+        let a = [0; 5]
+
+        // Nested array example
+        let b = [[1, 2, 3], [4, 5, 6]]
+
+        return a[0] + b[0][0]
+    }
+}

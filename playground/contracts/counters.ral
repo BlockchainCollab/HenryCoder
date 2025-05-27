@@ -1,0 +1,35 @@
+Contract Counters() {
+  // All maps must be defined here with `mapping[KeyType, ValueType]`, before events and constants
+  mapping[Address, U256] counters
+
+  @using(preapprovedAssets = true, checkExternalCaller = false, updateFields = true)
+  pub fn create() -> () {
+    let key = callerAddress!()
+    let depositor = key
+    // The depositor will deposit a minimal ALPH deposit for the new map entry which is a subcontract
+    counters.insert!(depositor, key, 0)
+  }
+
+  @using(checkExternalCaller = false, updateFields = true)
+  pub fn count() -> () {
+    let key = callerAddress!()
+    let value = counters[key]
+    // Update the map entry value
+    counters[key] = value + 1
+  }
+
+  @using(checkExternalCaller = false, updateFields = true)
+  pub fn clear() -> U256 {
+    let key = callerAddress!()
+    let depositRecipient = key
+    let value = counters[key]
+    // Each map entry removal redeems the map entry deposit
+    counters.remove!(depositRecipient, key)
+    return value
+  }
+
+  pub fn contains() -> Bool {
+    // Check the existence of map entry
+    return counters.contains!(callerAddress!())
+  }
+}

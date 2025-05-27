@@ -1,0 +1,23 @@
+Contract Loop() {
+    pub fn loop() -> () {
+        // For loop implementation
+        // Note: Ralph doesn't support continue/break, so we use if-else instead
+        let mut i = 0
+        while (i < 10) {
+            if (i != 3) {  // Skip i == 3 (equivalent to continue)
+                if (i == 5) {
+                    i = 10  // Exit loop (equivalent to break)
+                } else {
+                    // Do nothing, just increment
+                }
+            }
+            i += 1
+        }
+
+        // While loop implementation
+        let mut j = 0
+        while (j < 10) {
+            j += 1
+        }
+    }
+}

@@ -1,0 +1,47 @@
+// Structs must always be declared outside of contract scope
+struct Book {
+  mut title: ByteVec,
+  mut status: U256  // BookStatus
+}
+
+enum ErrorCodes {
+  BookNotFound = 0
+  BookBorrowed
+  BookListFull
+  OnlyMasterCanAdd
+}
+
+Contract BookShelf(master: Address, mut bookListLength: U256) {
+  mapping[U256, Book] bookList
+
+  event BookAdded(index: U256, title: ByteVec)
+  event BookBorrowed(index: U256, title: ByteVec)
+
+  const MAX_BOOKS = 20
+
+  enum BookStatus {
+    Available = 0
+    Borrowed
+  }
+
+  @using(checkExternalCaller = false, updateFields = true)
+  pub fn borrowBook(index: U256) -> Book {
+    assert!(bookList.contains!(index), ErrorCodes.BookNotFound)
+    let mut book = bookList[index]
+    assert!(book.status != BookStatus.Borrowed, ErrorCodes.BookBorrowed)
+    book.status = BookStatus.Borrowed
+    bookList[index] = book
+    emit BookBorrowed(index, book.title)
+    return book
+  }
+
+  @using(updateFields = true)
+  pub fn addNewBook(bookTitle: ByteVec) -> () {
+    checkCaller!(callerAddress!() == master, ErrorCodes.OnlyMasterCanAdd)
+    assert!(bookListLength < MAX_BOOKS, ErrorCodes.BookListFull)
+    let book = Book { title: bookTitle, status: BookStatus.Available }
+    bookList.insert!(bookListLength, book)
+    bookListLength = bookListLength + 1
+    emit BookAdded(bookListLength, bookTitle)
+  }
+}

@@ -37,6 +37,7 @@ class TranslateRequest(BaseModel):
 
 class TranslateResponse(BaseModel):
     translated_code: str
+    reasoning: str
     warnings: List[str] = []
     errors: List[str] = []
 
@@ -55,16 +56,18 @@ async def translate_code(request: TranslateRequest):
 
     # Call the translation service
     translated_code = ""
+    reasoning = ""
     all_warnings = []
     all_errors = []
-    async for chunk, warnings, errors in perform_translation(
+    async for chunk, reasoning_chunk, warnings, errors in perform_translation(
         source_code=source_code,
         optimize=options.optimize,
         include_comments=options.include_comments,
         mimic_defaults=options.mimic_defaults,
         stream=False  # Ensure streaming is off for this endpoint
     ):
-        translated_code += chunk
+        translated_code += reasoning_chunk
+        reasoning += reasoning
         all_warnings.extend(warnings)
         all_errors.extend(errors)
 
@@ -90,7 +93,7 @@ async def translate_code_stream(request: TranslateRequest):
         raise HTTPException(status_code=400, detail="Please provide EVM code for translation.")
 
     async def translation_generator():
-        async for chunk, warnings, errors in perform_translation(
+        async for chunk, reasoning, warnings, errors in perform_translation(
             source_code=source_code,
             optimize=options.optimize,
             include_comments=options.include_comments,
@@ -99,6 +102,7 @@ async def translate_code_stream(request: TranslateRequest):
         ):
             data = {
                 "translated_code": chunk,
+                "reasoning_chunk": reasoning,
                 "warnings": warnings,
                 "errors": errors
             }

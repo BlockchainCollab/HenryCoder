@@ -2,6 +2,8 @@ Functions are the executable units of code, you can also define functions inside
 
 ### Function Signatures
 
+Function names must start with a lowercase letter [a-z] and later can contain all letters [a-zA-Z], digits [0-9], and underscores [_]. Function names must be unique within a contract.
+
 ```ralph
 // Public function, which can be called by anyone
 pub fn foo() -> ()

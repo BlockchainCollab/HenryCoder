@@ -219,20 +219,24 @@ Ralph's mappings cannot be nested, one way to work around this is to use a ByteV
 
 ```ralph
 Contract NestedMap() {
-  mapping[ByteVec, Bool] coordinates
+  // This is an efficient way to do manage multi dimensional maps
+  // In solidity this would be `mapping(Address => mapping(Address => String)) messages`
+  // Ralph must use `ByteVec` type for text
+  mapping[ByteVec, ByteVec] messages
 
-  @inline fn getCoordinatesKey(x: U256, y: U256) -> ByteVec {
-    return encodeToByteVec!(x, y)
+  @inline fn getMessagesKey(a: Address, b: Address) -> ByteVec {
+    return encodeToByteVec!(a, b)
   }
 
-  @using(checkExternalCaller = false)
-  pub fn setVisited(x: U256, y: U256) -> () {
-    let key = getCoordinatesKey(x, y)
+  pub fn setMessage(to: Address, message: ByteVec) -> () {
+    // Don't allow sending messages to self
+    checkCaller!(to != callerAddress!(), 1001)
+    let key = getMessagesKey(callerAddress!(), to)
     // When state changes happen inside a conditional block `@using(updateFields = true)` is not needed
-    if coordinates.contains!(key) {
-      coordinates[key] = true
+    if messages.contains!(key) {
+      messages[key] = message
     } else {
-      coordinates.insert!(key, true)
+      messages.insert!(key, message)
     }
   }
 }

@@ -13,8 +13,6 @@ contract Array {
     }
 
     // Solidity can return the entire array.
-    // But this function should be avoided for
-    // arrays that can grow indefinitely in length.
     function getArr() public view returns (uint256[] memory) {
         return arr;
     }

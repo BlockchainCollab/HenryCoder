@@ -103,7 +103,7 @@ def load_example_translations() -> str:
 
 async def perform_translation(
     source_code: str, optimize: bool, include_comments: bool, mimic_defaults: bool = False, stream: bool = False
-) -> AsyncGenerator[tuple[str, list[str], list[str]], None]:
+) -> AsyncGenerator[tuple[str, str, list[str], list[str]], None]:
     """
     Performs the translation using OpenAI-compatible API via the OpenAI Python client.
     If `stream` is True, yields translation chunks incrementally.
@@ -133,7 +133,7 @@ async def perform_translation(
     
     # Second prompt with the actual translation request
     user_prompt_parts = [
-        "Now, translate the following EVM code. Only provide the resulting Ralph code without \"```ralph\" markdown. "
+        "Now, translate the following EVM code. There is no limit to how long the output can be. IMPORTANT: Only provide the resulting Ralph code WITHOUT \"```ralph\" markdown or any other information. "
         f"Optimize: {optimize}. "
         f"Include comments: {include_comments}. "
         f"Mimic Solidity defaults when loading from map key that does not exist: {mimic_defaults}.",
@@ -168,14 +168,16 @@ async def perform_translation(
             )
             async for chunk in response:
                 content = getattr(chunk.choices[0].delta, "content", "")
-                if content:
-                    yield content, warnings, errors
+                reasoning = getattr(chunk.choices[0].delta, "reasoning", "")
+                if content or reasoning:
+                    yield content, reasoning, warnings, errors
         else:
             response = await client.chat.completions.create(
                 **common_parameters,
                 stream=False
             )
             translated_code = response.choices[0].message.content
-            yield translated_code, warnings, errors
+            reasoning = response.choices[0].message.reasoning if hasattr(response.choices[0].message, 'reasoning') else ""
+            yield translated_code, reasoning, warnings, errors
     except Exception as e:
         raise RuntimeError(f"OpenAI/DeepInfra API request failed: {str(e)}") from e

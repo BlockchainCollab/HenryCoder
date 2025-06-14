@@ -52,8 +52,6 @@ fn <map>.remove!(key: <Bool | U256 | I256 | Address | ByteVec>) -> ()
 
 Remove a key from the map
 
-> @param **refundRecipient** *the address to receive the redeemed minimal storage deposit. If not provided, minimal storage deposit will be received by the transaction caller*
->
 > @param **key** *the key to remove*
 >
 > @returns

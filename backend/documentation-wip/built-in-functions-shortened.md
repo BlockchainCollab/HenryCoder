@@ -1,13 +1,3 @@
-The built-in functions are divided into several categories: 
-[Contract](#contract-functions),
-[SubContract](#subcontract-functions),
-[Map](#map-functions),
-[Asset](#asset-functions),
-[Utils](#utils-functions),
-[Chain](#chain-functions),
-[Conversion](#conversion-functions),
-[ByteVec](#bytevec-functions),
-[Cryptography](#cryptography-functions).
 All built-in functions are suffixed with `!`.
 All of the byte encoding use Big Endian byte order.
 

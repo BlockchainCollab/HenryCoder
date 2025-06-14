@@ -18,11 +18,7 @@ All of the byte encoding use Big Endian byte order.
 fn externalCallerAddress!() -> (Address)
 ```
 
-<ol>
-<li>When used in a TxScript, returns the transaction caller's address. The transaction must have identical input addresses, otherwise the call fails.</li>
-<li>When used in a contract function called from a TxScript, returns the transaction caller's address.</li>
-<li>When used in a contract function called from another contract, returns the address of the first external calling contract in the call stack (different from the current contract). If multiple calls come from the same contract, it skips intermediate frames to find the first external contract caller.</li>
-</ol>
+Returns the address which called the smart contract
 
 > @returns *the address of the external caller*
 

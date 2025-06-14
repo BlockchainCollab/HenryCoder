@@ -1,3 +1,13 @@
+---
+sidebar_position: 90
+title: Built-in Functions
+sidebar_label: Built-in functions
+---
+
+<!---
+This file is auto-generated with "scripts/generate-builtin-functions.js"
+-->
+
 The built-in functions are divided into several categories:
 [Contract](#contract-functions),
 [SubContract](#subcontract-functions),
@@ -7,7 +17,8 @@ The built-in functions are divided into several categories:
 [Chain](#chain-functions),
 [Conversion](#conversion-functions),
 [ByteVec](#bytevec-functions),
-[Cryptography](#cryptography-functions).
+[Cryptography](#cryptography-functions),
+[Test](#test-functions).
 All built-in functions are suffixed with `!`.
 All of the byte encoding use Big Endian byte order.
 
@@ -15,7 +26,7 @@ All of the byte encoding use Big Endian byte order.
 ---
 ### encodeFields
 
-```ralph
+```Rust
 fn <ContractName>.encodeFields!(...) -> (ByteVec, ByteVec)
 ```
 
@@ -29,7 +40,7 @@ Encode the fields for creating a contract
 
 ### createContract
 
-```ralph
+```Rust
 fn createContract!(bytecode:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec) -> (ByteVec)
 ```
 
@@ -47,7 +58,7 @@ Creates a new contract without token issuance.
 
 ### createContractWithToken
 
-```ralph
+```Rust
 fn createContractWithToken!(bytecode:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec, issueTokenAmount:U256, issueTo?:Address) -> (ByteVec)
 ```
 
@@ -69,7 +80,7 @@ Creates a new contract with token issuance.
 
 ### copyCreateContract
 
-```ralph
+```Rust
 fn copyCreateContract!(contractId:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec) -> (ByteVec)
 ```
 
@@ -87,7 +98,7 @@ Creates a new contract without token issuance by copying another contract's code
 
 ### copyCreateContractWithToken
 
-```ralph
+```Rust
 fn copyCreateContractWithToken!(contractId:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec, issueTokenAmount:U256, issueTo?:Address) -> (ByteVec)
 ```
 
@@ -109,7 +120,7 @@ Creates a new contract with token issuance by copying another contract's code. T
 
 ### selfAddress
 
-```ralph
+```Rust
 fn selfAddress!() -> (Address)
 ```
 
@@ -121,7 +132,7 @@ Returns the address of the contract.
 
 ### selfContractId
 
-```ralph
+```Rust
 fn selfContractId!() -> (ByteVec)
 ```
 
@@ -133,7 +144,7 @@ Returns the id (ByteVec) of the contract.
 
 ### selfTokenId
 
-```ralph
+```Rust
 fn selfTokenId!() -> (ByteVec)
 ```
 
@@ -145,7 +156,7 @@ Returns the token id (ByteVec) of the contract.
 
 ### tokenId
 
-```ralph
+```Rust
 fn tokenId!(contract:<Contract>) -> (ByteVec)
 ```
 
@@ -159,7 +170,7 @@ Returns the id of the contract
 
 ### contractId
 
-```ralph
+```Rust
 fn contractId!(contract:<Contract>) -> (ByteVec)
 ```
 
@@ -173,7 +184,7 @@ Returns the id of the contract
 
 ### contractAddress
 
-```ralph
+```Rust
 fn contractAddress!(contract:<Contract>) -> (Address)
 ```
 
@@ -187,7 +198,7 @@ Returns the address of the contract
 
 ### callerContractId
 
-```ralph
+```Rust
 fn callerContractId!() -> (ByteVec)
 ```
 
@@ -199,7 +210,7 @@ Returns the contract id of the immediate caller, which could be the current cont
 
 ### callerAddress
 
-```ralph
+```Rust
 fn callerAddress!() -> (Address)
 ```
 
@@ -215,7 +226,7 @@ fn callerAddress!() -> (Address)
 
 ### externalCallerContractId
 
-```ralph
+```Rust
 fn externalCallerContractId!() -> (ByteVec)
 ```
 
@@ -227,7 +238,7 @@ Returns the contract id of the first external contract in the call stack (differ
 
 ### externalCallerAddress
 
-```ralph
+```Rust
 fn externalCallerAddress!() -> (Address)
 ```
 
@@ -243,7 +254,7 @@ fn externalCallerAddress!() -> (Address)
 
 ### contractInitialStateHash
 
-```ralph
+```Rust
 fn contractInitialStateHash!(contractId:ByteVec) -> (ByteVec)
 ```
 
@@ -257,7 +268,7 @@ Returns the initial state hash of the contract.
 
 ### contractCodeHash
 
-```ralph
+```Rust
 fn contractCodeHash!(contractId:ByteVec) -> (ByteVec)
 ```
 
@@ -271,7 +282,7 @@ Returns the contract code hash of the contract.
 
 ### callerInitialStateHash
 
-```ralph
+```Rust
 fn callerInitialStateHash!() -> (ByteVec)
 ```
 
@@ -283,7 +294,7 @@ Returns the initial state hash of the caller contract.
 
 ### callerCodeHash
 
-```ralph
+```Rust
 fn callerCodeHash!() -> (ByteVec)
 ```
 
@@ -295,7 +306,7 @@ Returns the contract code hash of the caller contract.
 
 ### contractExists
 
-```ralph
+```Rust
 fn contractExists!(contractId:ByteVec) -> (Bool)
 ```
 
@@ -309,7 +320,7 @@ Checks whether the contract exists with the given id.
 
 ### destroySelf
 
-```ralph
+```Rust
 fn destroySelf!(refundAddress:Address) -> ()
 ```
 
@@ -323,7 +334,7 @@ Destroys the contract and transfer the remaining assets to a designated address.
 
 ### migrate
 
-```ralph
+```Rust
 fn migrate!(newBytecode:ByteVec) -> ()
 ```
 
@@ -337,7 +348,7 @@ Migrates the code of the contract.
 
 ### migrateWithFields
 
-```ralph
+```Rust
 fn migrateWithFields!(newBytecode:ByteVec, newEncodedImmFields:ByteVec, newEncodedMutFields:ByteVec) -> ()
 ```
 
@@ -355,7 +366,7 @@ Migrates both the code and the fields of the contract.
 
 ### isCalledFromTxScript
 
-```ralph
+```Rust
 fn isCalledFromTxScript!() -> (Bool)
 ```
 
@@ -367,7 +378,7 @@ Checks whether the function is called by a TxScript.
 
 ### selfContract
 
-```ralph
+```Rust
 fn selfContract!() -> (<Contract>)
 ```
 
@@ -381,7 +392,7 @@ Returns self contract
 ---
 ### createSubContract
 
-```ralph
+```Rust
 fn createSubContract!(subContractPath:ByteVec, bytecode:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec) -> (ByteVec)
 ```
 
@@ -401,7 +412,7 @@ Creates a new sub-contract without token issuance.
 
 ### createSubContractWithToken
 
-```ralph
+```Rust
 fn createSubContractWithToken!(subContractPath:ByteVec, bytecode:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec, issueTokenAmount:U256, issueTo?:Address) -> (ByteVec)
 ```
 
@@ -425,7 +436,7 @@ Creates a new sub-contract with token issuance.
 
 ### copyCreateSubContract
 
-```ralph
+```Rust
 fn copyCreateSubContract!(subContractPath:ByteVec, contractId:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec) -> (ByteVec)
 ```
 
@@ -445,7 +456,7 @@ Creates a new sub-contract without token issuance by copying another contract's 
 
 ### copyCreateSubContractWithToken
 
-```ralph
+```Rust
 fn copyCreateSubContractWithToken!(subContractPath:ByteVec, contractId:ByteVec, encodedImmFields:ByteVec, encodedMutFields:ByteVec, issueTokenAmount:U256, issueTo?:Address) -> (ByteVec)
 ```
 
@@ -469,7 +480,7 @@ Creates a new sub-contract with token issuance by copying another contract's cod
 
 ### subContractId
 
-```ralph
+```Rust
 fn subContractId!(subContractPath:ByteVec) -> (ByteVec)
 ```
 
@@ -483,7 +494,7 @@ Returns the id of the sub contract.
 
 ### subContractIdOf
 
-```ralph
+```Rust
 fn subContractIdOf!(contract:<Contract>, subContractPath:ByteVec) -> (ByteVec)
 ```
 
@@ -499,7 +510,7 @@ Returns the id of the sub contract.
 
 ### subContractIdInParentGroup
 
-```ralph
+```Rust
 fn subContractIdInParentGroup!(contract:<Contract>, subContractPath:ByteVec) -> (ByteVec)
 ```
 
@@ -517,7 +528,7 @@ Returns the id of the sub contract.
 ---
 ### map.insert
 
-```ralph
+```Rust
 fn <map>.insert!(depositorAddress?: Address, key: <Bool | U256 | I256 | Address | ByteVec>, value: Any) -> ()
 ```
 
@@ -535,7 +546,7 @@ Insert a key/value pair into the map. No brace syntax is required, as the minima
 
 ### map.remove
 
-```ralph
+```Rust
 fn <map>.remove!(refundRecipient?: Address, key: <Bool | U256 | I256 | Address | ByteVec>) -> ()
 ```
 
@@ -551,7 +562,7 @@ Remove a key from the map
 
 ### map.contains
 
-```ralph
+```Rust
 fn <map>.contains!(key: <Bool | U256 | I256 | Address | ByteVec>) -> Bool
 ```
 
@@ -567,7 +578,7 @@ Check whether the map contains a bindiing for the key
 ---
 ### approveToken
 
-```ralph
+```Rust
 fn approveToken!(fromAddress:Address, tokenId:ByteVec, amount:U256) -> ()
 ```
 
@@ -585,7 +596,7 @@ Approves the usage of certain amount of token from the given address
 
 ### tokenRemaining
 
-```ralph
+```Rust
 fn tokenRemaining!(address:Address, tokenId:ByteVec) -> (U256)
 ```
 
@@ -601,7 +612,7 @@ Returns the amount of the remaining token amount in the input assets of the func
 
 ### transferToken
 
-```ralph
+```Rust
 fn transferToken!(fromAddress:Address, toAddress:Address, tokenId:ByteVec, amount:U256) -> ()
 ```
 
@@ -621,7 +632,7 @@ Transfers token from the input assets of the function.
 
 ### transferTokenFromSelf
 
-```ralph
+```Rust
 fn transferTokenFromSelf!(toAddress:Address, tokenId:ByteVec, amount:U256) -> ()
 ```
 
@@ -639,7 +650,7 @@ Transfers the contract's token from the input assets of the function. The toAddr
 
 ### transferTokenToSelf
 
-```ralph
+```Rust
 fn transferTokenToSelf!(fromAddress:Address, tokenId:ByteVec, amount:U256) -> ()
 ```
 
@@ -657,7 +668,7 @@ Transfers token to the contract from the input assets of the function. The fromA
 
 ### burnToken
 
-```ralph
+```Rust
 fn burnToken!(address:Address, tokenId:ByteVec, amount:U256) -> ()
 ```
 
@@ -675,7 +686,7 @@ Burns token from the input assets of the function.
 
 ### lockApprovedAssets
 
-```ralph
+```Rust
 fn lockApprovedAssets!(address:Address, timestamp:U256) -> ()
 ```
 
@@ -691,7 +702,7 @@ Locks the current approved assets.
 
 ### payGasFee
 
-```ralph
+```Rust
 fn payGasFee!(payer:Address, amount:U256) -> ()
 ```
 
@@ -709,7 +720,7 @@ Pay gas fee.
 ---
 ### assert
 
-```ralph
+```Rust
 fn assert!(condition:Bool, errorCode:U256) -> ()
 ```
 
@@ -725,7 +736,7 @@ Tests the condition or checks invariants.
 
 ### checkCaller
 
-```ralph
+```Rust
 fn checkCaller!(condition:Bool, errorCode:U256) -> ()
 ```
 
@@ -741,7 +752,7 @@ Checks conditions of the external caller of the function.
 
 ### isAssetAddress
 
-```ralph
+```Rust
 fn isAssetAddress!(address:Address) -> (Bool)
 ```
 
@@ -755,7 +766,7 @@ Returns whether an address is an asset address.
 
 ### isContractAddress
 
-```ralph
+```Rust
 fn isContractAddress!(address:Address) -> (Bool)
 ```
 
@@ -769,7 +780,7 @@ Returns whether an address is a contract address.
 
 ### zeros
 
-```ralph
+```Rust
 fn zeros!(n:U256) -> (ByteVec)
 ```
 
@@ -783,7 +794,7 @@ Returns a ByteVec of zeros.
 
 ### panic
 
-```ralph
+```Rust
 fn panic!(errorCode?: U256) -> (Never)
 ```
 
@@ -797,7 +808,7 @@ Terminates the application immediately.
 
 ### mulModN
 
-```ralph
+```Rust
 fn mulModN!(x:U256, y:U256, n:U256) -> (U256)
 ```
 
@@ -815,7 +826,7 @@ Returns compute the x * y % n.
 
 ### addModN
 
-```ralph
+```Rust
 fn addModN!(x:U256, y:U256, n:U256) -> (U256)
 ```
 
@@ -833,7 +844,7 @@ Returns compute the (x + y) % n.
 
 ### u256Max
 
-```ralph
+```Rust
 fn u256Max!() -> (U256)
 ```
 
@@ -845,7 +856,7 @@ Returns the max value of U256.
 
 ### i256Max
 
-```ralph
+```Rust
 fn i256Max!() -> (I256)
 ```
 
@@ -857,7 +868,7 @@ Returns the max value of I256.
 
 ### i256Min
 
-```ralph
+```Rust
 fn i256Min!() -> (I256)
 ```
 
@@ -869,7 +880,7 @@ Returns the min value of I256.
 
 ### groupOfAddress
 
-```ralph
+```Rust
 fn groupOfAddress!(address:Address) -> (U256)
 ```
 
@@ -883,7 +894,7 @@ Returns the group of the input address.
 
 ### len
 
-```ralph
+```Rust
 fn len!(array) -> (U256)
 ```
 
@@ -897,7 +908,7 @@ Get the length of an array
 
 ### nullContractAddress
 
-```ralph
+```Rust
 fn nullContractAddress!() -> (Address)
 ```
 
@@ -909,7 +920,7 @@ Returns the null contract address with contract id being zeros.
 
 ### minimalContractDeposit
 
-```ralph
+```Rust
 fn minimalContractDeposit!() -> (U256)
 ```
 
@@ -921,7 +932,7 @@ The minimal contract deposit
 
 ### mapEntryDeposit
 
-```ralph
+```Rust
 fn mapEntryDeposit!() -> (U256)
 ```
 
@@ -935,7 +946,7 @@ The amount of ALPH required to create a map entry, which is '0.1 ALPH' since Rho
 ---
 ### networkId
 
-```ralph
+```Rust
 fn networkId!() -> (ByteVec)
 ```
 
@@ -947,7 +958,7 @@ Returns the network id (a single byte).
 
 ### blockTimeStamp
 
-```ralph
+```Rust
 fn blockTimeStamp!() -> (U256)
 ```
 
@@ -959,7 +970,7 @@ Returns the timestamp of the current block in milliseconds since the Unix epoch.
 
 ### blockTarget
 
-```ralph
+```Rust
 fn blockTarget!() -> (U256)
 ```
 
@@ -971,7 +982,7 @@ Returns the block difficulty target.
 
 ### txId
 
-```ralph
+```Rust
 fn txId!() -> (ByteVec)
 ```
 
@@ -983,7 +994,7 @@ Returns the current transaction id.
 
 ### txInputAddress
 
-```ralph
+```Rust
 fn txInputAddress!(txInputIndex:U256) -> (Address)
 ```
 
@@ -997,7 +1008,7 @@ Returns the n-th transaction input address.
 
 ### txInputsSize
 
-```ralph
+```Rust
 fn txInputsSize!() -> (U256)
 ```
 
@@ -1009,7 +1020,7 @@ Returns the number of transaction inputs.
 
 ### txGasPrice
 
-```ralph
+```Rust
 fn txGasPrice!() -> (U256)
 ```
 
@@ -1021,7 +1032,7 @@ Returns the current transaction gas price.
 
 ### txGasAmount
 
-```ralph
+```Rust
 fn txGasAmount!() -> (U256)
 ```
 
@@ -1033,7 +1044,7 @@ Returns the current transaction gas amount.
 
 ### txGasFee
 
-```ralph
+```Rust
 fn txGasFee!() -> (U256)
 ```
 
@@ -1045,7 +1056,7 @@ Returns the current transaction gas fee.
 
 ### verifyAbsoluteLocktime
 
-```ralph
+```Rust
 fn verifyAbsoluteLocktime!(lockUntil:U256) -> ()
 ```
 
@@ -1059,7 +1070,7 @@ Verifies that the absolute locktime is before the block timestamp (milliseconds)
 
 ### verifyRelativeLocktime
 
-```ralph
+```Rust
 fn verifyRelativeLocktime!(txInputIndex:U256, lockDuration:U256) -> ()
 ```
 
@@ -1075,7 +1086,7 @@ Verifies that the input's creation timestamp + lock duration is before the block
 
 ### dustAmount
 
-```ralph
+```Rust
 fn dustAmount!() -> (U256)
 ```
 
@@ -1089,7 +1100,7 @@ Returns the dust amount of an UTXO.
 ---
 ### toI256
 
-```ralph
+```Rust
 fn toI256!(from:U256) -> (I256)
 ```
 
@@ -1103,7 +1114,7 @@ Converts U256 to I256.
 
 ### toU256
 
-```ralph
+```Rust
 fn toU256!(from:I256) -> (U256)
 ```
 
@@ -1117,7 +1128,7 @@ Converts I256 to U256.
 
 ### toByteVec
 
-```ralph
+```Rust
 fn toByteVec!(from:Bool|I256|U256|Address) -> (ByteVec)
 ```
 
@@ -1131,7 +1142,7 @@ Converts Bool/I256/U256/Address to ByteVec
 
 ### contractIdToAddress
 
-```ralph
+```Rust
 fn contractIdToAddress!(contractId:ByteVec) -> (Address)
 ```
 
@@ -1145,7 +1156,7 @@ Converts contract id (ByteVec) to contract address (Address).
 
 ### addressToContractId
 
-```ralph
+```Rust
 fn addressToContractId!(contractAddress:Address) -> (ByteVec)
 ```
 
@@ -1159,7 +1170,7 @@ Converts contract address (Address) to contract id (ByteVec)
 
 ### byteVecToAddress
 
-```ralph
+```Rust
 fn byteVecToAddress!(bytes:ByteVec) -> (Address)
 ```
 
@@ -1173,7 +1184,7 @@ Converts ByteVec to Address.
 
 ### u256To1Byte
 
-```ralph
+```Rust
 fn u256To1Byte!(u256:U256) -> (ByteVec)
 ```
 
@@ -1187,7 +1198,7 @@ Converts U256 to 1 byte.
 
 ### u256To2Byte
 
-```ralph
+```Rust
 fn u256To2Byte!(u256:U256) -> (ByteVec)
 ```
 
@@ -1201,7 +1212,7 @@ Converts U256 to 2 big-endian bytes.
 
 ### u256To4Byte
 
-```ralph
+```Rust
 fn u256To4Byte!(u256:U256) -> (ByteVec)
 ```
 
@@ -1215,7 +1226,7 @@ Converts U256 to 4 big-endian bytes.
 
 ### u256To8Byte
 
-```ralph
+```Rust
 fn u256To8Byte!(u256:U256) -> (ByteVec)
 ```
 
@@ -1229,7 +1240,7 @@ Converts U256 to 8 big-endian bytes.
 
 ### u256To16Byte
 
-```ralph
+```Rust
 fn u256To16Byte!(u256:U256) -> (ByteVec)
 ```
 
@@ -1243,7 +1254,7 @@ Converts U256 to 16 big-endian bytes.
 
 ### u256To32Byte
 
-```ralph
+```Rust
 fn u256To32Byte!(u256:U256) -> (ByteVec)
 ```
 
@@ -1257,7 +1268,7 @@ Converts U256 to 32 big-endian bytes.
 
 ### u256ToString
 
-```ralph
+```Rust
 fn u256ToString!(u256:U256) -> (ByteVec)
 ```
 
@@ -1271,7 +1282,7 @@ Converts U256 to string in ByteVec.
 
 ### i256ToString
 
-```ralph
+```Rust
 fn i256ToString!(i256:I256) -> (ByteVec)
 ```
 
@@ -1285,7 +1296,7 @@ Converts I256 to string in ByteVec.
 
 ### boolToString
 
-```ralph
+```Rust
 fn boolToString!(bool:Bool) -> (ByteVec)
 ```
 
@@ -1299,7 +1310,7 @@ Converts Bool to string in ByteVec.
 
 ### u256From1Byte
 
-```ralph
+```Rust
 fn u256From1Byte!(bytes:ByteVec) -> (U256)
 ```
 
@@ -1313,7 +1324,7 @@ Converts 1 byte to U256.
 
 ### u256From2Byte
 
-```ralph
+```Rust
 fn u256From2Byte!(bytes:ByteVec) -> (U256)
 ```
 
@@ -1327,7 +1338,7 @@ Converts 2 big-endian bytes to U256.
 
 ### u256From4Byte
 
-```ralph
+```Rust
 fn u256From4Byte!(bytes:ByteVec) -> (U256)
 ```
 
@@ -1341,7 +1352,7 @@ Converts 4 big-endian bytes to U256.
 
 ### u256From8Byte
 
-```ralph
+```Rust
 fn u256From8Byte!(bytes:ByteVec) -> (U256)
 ```
 
@@ -1355,7 +1366,7 @@ Converts 8 big-endian bytes to U256.
 
 ### u256From16Byte
 
-```ralph
+```Rust
 fn u256From16Byte!(bytes:ByteVec) -> (U256)
 ```
 
@@ -1369,7 +1380,7 @@ Converts 16 big-endian bytes to U256.
 
 ### u256From32Byte
 
-```ralph
+```Rust
 fn u256From32Byte!(bytes:ByteVec) -> (U256)
 ```
 
@@ -1385,7 +1396,7 @@ Converts 32 big-endian bytes to U256.
 ---
 ### size
 
-```ralph
+```Rust
 fn size!(bytes:ByteVec) -> (U256)
 ```
 
@@ -1399,7 +1410,7 @@ Returns the size of the ByteVec.
 
 ### byteVecSlice
 
-```ralph
+```Rust
 fn byteVecSlice!(bytes:ByteVec, from:U256, until:U256) -> (ByteVec)
 ```
 
@@ -1417,7 +1428,7 @@ Selects an interval of bytes.
 
 ### encodeToByteVec
 
-```ralph
+```Rust
 fn encodeToByteVec!(...any) -> (ByteVec)
 ```
 
@@ -1433,7 +1444,7 @@ Encodes inputs as big-endian ByteVec.
 ---
 ### blake2b
 
-```ralph
+```Rust
 fn blake2b!(data:ByteVec) -> (ByteVec)
 ```
 
@@ -1447,7 +1458,7 @@ Computes the Blake2b-256 hash of the input.
 
 ### keccak256
 
-```ralph
+```Rust
 fn keccak256!(data:ByteVec) -> (ByteVec)
 ```
 
@@ -1461,7 +1472,7 @@ Computes the Keccak256 hash of the input.
 
 ### sha256
 
-```ralph
+```Rust
 fn sha256!(data:ByteVec) -> (ByteVec)
 ```
 
@@ -1475,7 +1486,7 @@ Computes the Sha256 hash of the input.
 
 ### sha3
 
-```ralph
+```Rust
 fn sha3!(data:ByteVec) -> (ByteVec)
 ```
 
@@ -1489,7 +1500,7 @@ Computes the Sha3 hash of the input.
 
 ### verifyTxSignature
 
-```ralph
+```Rust
 fn verifyTxSignature!(publicKey:ByteVec) -> ()
 ```
 
@@ -1503,7 +1514,7 @@ Verifies the transaction SecP256K1 signature of a public key. The signature is s
 
 ### getSegregatedSignature
 
-```ralph
+```Rust
 fn getSegregatedSignature!() -> (ByteVec)
 ```
 
@@ -1515,7 +1526,7 @@ The segregated signature of the transaction
 
 ### verifySecP256K1
 
-```ralph
+```Rust
 fn verifySecP256K1!(data:ByteVec, publicKey:ByteVec, signature:ByteVec) -> ()
 ```
 
@@ -1533,7 +1544,7 @@ Verifies the SecP256K1 signature of the input and public key.
 
 ### verifyED25519
 
-```ralph
+```Rust
 fn verifyED25519!(data:ByteVec, publicKey:ByteVec, signature:ByteVec) -> ()
 ```
 
@@ -1551,7 +1562,7 @@ Verifies the ED25519 signature of the input and public key.
 
 ### verifyBIP340Schnorr
 
-```ralph
+```Rust
 fn verifyBIP340Schnorr!(data:ByteVec, publicKey:ByteVec, signature:ByteVec) -> ()
 ```
 
@@ -1569,7 +1580,7 @@ Verifies the BIP340 Schnorr signature of the input and public key.
 
 ### ethEcRecover
 
-```ralph
+```Rust
 fn ethEcRecover!(data:ByteVec, signature:ByteVec) -> (ByteVec)
 ```
 
@@ -1585,7 +1596,7 @@ Recovers the ETH account that signed the data.
 
 ### verifySignature
 
-```ralph
+```Rust
 fn verifySignature!(data:ByteVec, publicKey:ByteVec, signature:ByteVec, publicKeyType:ByteVec) -> ()
 ```
 
@@ -1605,7 +1616,7 @@ fn verifySignature!(data:ByteVec, publicKey:ByteVec, signature:ByteVec, publicKe
 
 ### verifySecP256R1
 
-```ralph
+```Rust
 fn verifySecP256R1!(data:ByteVec, publicKey:ByteVec, signature:ByteVec) -> ()
 ```
 
@@ -1623,7 +1634,7 @@ Verifies the SecP256R1 signature of the input data using the provided public key
 
 ### verifyWebAuthn
 
-```ralph
+```Rust
 fn verifyWebAuthn!(challenge:ByteVec, publicKey:ByteVec, payload:ByteVec) -> ()
 ```
 
@@ -1641,7 +1652,7 @@ Verifies a WebAuthn signature for the input challenge using the provided public 
 
 ### getSegregatedWebAuthnSignature
 
-```ralph
+```Rust
 fn getSegregatedWebAuthnSignature!() -> (ByteVec)
 ```
 
@@ -1650,3 +1661,90 @@ Retrieves the segregated WebAuthn signature payload from the current transaction
 > @returns *the segregated WebAuthn payload containing the signature and authenticator data*
 
 ---
+
+## Test Functions
+---
+### testCheck
+
+```Rust
+fn testCheck!(condition:Bool) -> ()
+```
+
+Tests the condition or checks invariants.
+
+> @param **condition** *the condition to be checked*
+>
+> @returns
+
+---
+
+### testEqual
+
+```Rust
+fn testEqual!(left: <Bool | U256 | I256 | Address | ByteVec>, right: <Bool | U256 | I256 | Address | ByteVec>) -> ()
+```
+
+Asserts that the given values are equal.
+
+> @param **left** *the first value to compare*
+>
+> @param **right** *the second value to compare; must be the same type as `left`*
+>
+> @returns
+
+---
+
+### testFail
+
+```Rust
+fn testFail!(expr) -> ()
+```
+
+Asserts that the given expression throws an exception during execution.
+
+> @param **expr** *the expression to be executed*
+>
+> @returns
+
+---
+
+### testError
+
+```Rust
+fn testError!(expr, errorCode: U256) -> ()
+```
+
+Asserts that the given expression throws an exception with the expected error code.
+
+> @param **expr** *the expression to be executed*
+>
+> @param **errorCode** *the expected error code*
+>
+> @returns
+
+---
+
+### randomU256
+
+```Rust
+fn randomU256!() -> U256
+```
+
+Generates a random U256 value
+
+> @returns *a randomly generated U256 value for testing purposes*
+
+---
+
+### randomI256
+
+```Rust
+fn randomI256!() -> I256
+```
+
+Generates a random I256 value
+
+> @returns *a randomly generated I256 value for testing purposes*
+
+---
+

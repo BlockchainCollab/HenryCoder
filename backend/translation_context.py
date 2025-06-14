@@ -90,6 +90,3 @@ def load_example_translations() -> str:
 
 RALPH_DETAILS = load_ralph_details()
 EXAMPLE_TRANSLATIONS = load_example_translations()
-
-print(RALPH_DETAILS)
-print(EXAMPLE_TRANSLATIONS)

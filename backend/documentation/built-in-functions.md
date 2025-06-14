@@ -134,7 +134,7 @@ Transfers token from the input assets of the function.
 fn transferTokenFromSelf!(toAddress: Address, tokenId: ByteVec, amount: U256) -> ()
 ```
 
-Transfers the contract's token from the input assets of the function. The toAddress must not be the same as the contract address.
+Transfers the contract's token from the input assets of the function. The toAddress must not be the same as the contract address. The calling function must specify @using(assetsInContract = true) for this to work
 
 > @param **toAddress** *the address to transfer token to*
 >

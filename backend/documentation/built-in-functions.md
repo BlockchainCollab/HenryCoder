@@ -98,7 +98,7 @@ Approves the usage of certain amount of token from the given address
 fn tokenRemaining!(address: Address, tokenId: ByteVec) -> (U256)
 ```
 
-Returns the amount of the remaining token amount in the input assets of the function.
+Returns the amount of the remaining token amount in the input assets of the function. The calling function must have @using(assetsInContract=true) or @using(preapprovedAssets=true) or both specified
 
 > @param **address** *the input address*
 >

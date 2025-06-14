@@ -47,7 +47,7 @@ Insert a key/value pair into the map. No brace syntax is required, as the minima
 ### map.remove
 
 ```ralph
-fn <map>.remove!() -> ()
+fn <map>.remove!(key: <Bool | U256 | I256 | Address | ByteVec>) -> ()
 ```
 
 Remove a key from the map

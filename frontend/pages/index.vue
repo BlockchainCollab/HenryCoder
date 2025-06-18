@@ -183,16 +183,55 @@
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        class="h-6 w-6 inline"
+                        width="24"
+                        height="25"
+                        viewBox="0 0 24 25"
                         fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
                       >
                         <path
+                          d="M11.5 8.84424V4.84424"
+                          stroke="currentColor"
                           stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="1"
-                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                        <path
+                          d="M6.5 14.8442V18.8442"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M16.4996 16.844L16.4996 18.8442"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M11.5 18.8442V12.8442"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M6.5 4.84424V10.8442"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M16.5 4.84424V12.8442"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M9.5 8.84424L13.5 8.84424"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M4.5 14.8442L8.5 14.8442"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M14.5 16.8442H18.5"
+                          stroke="currentColor"
+                          stroke-linecap="round"
                         />
                       </svg>
                     </PopoverTrigger>
@@ -245,7 +284,7 @@
                 :disabled="loading"
                 :class="[
                   'w-full sm:w-[294px] font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.7)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out',
-                  outputCode && !loading
+                  !!outputCode && !loading
                     ? 'bg-transparent border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black'
                     : 'bg-[#FF8A00] hover:bg-orange-600 text-black',
                 ]"
@@ -399,7 +438,7 @@ hljs.registerLanguage("rust", rust);
 
 // State
 const sourceCode = ref("");
-const outputCode = ref(`Translation will appear here ✨`);
+const outputCode = ref(``);
 const highlightedOutput = ref("");
 const loading = ref(false);
 const errors = ref<string[]>([]);
@@ -474,8 +513,12 @@ const translateCode = async () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          code: sourceCode.value,
-          options: options.value,
+          source_code: sourceCode.value,
+          options: {
+            optimize: options.value.optimize,
+            include_comments: options.value.includeComments, // maps to include_comments for the API
+            mimic_defaults: options.value.mimicDefaults,
+          },
         }),
       }
     );
@@ -492,41 +535,62 @@ const translateCode = async () => {
     let done = false;
     let buffer = "";
     let currentOutput = "";
+    outputCode.value = "";
+    errors.value = [];
 
     while (!done) {
       const { value, done: streamDone } = await reader.read();
       done = streamDone;
       if (value) {
-        const decodedChunk = decoder.decode(value, { stream: true });
-        buffer += decodedChunk;
-        let eolIndex;
-        while ((eolIndex = buffer.indexOf("\n\n")) >= 0) {
-          const line = buffer.substring(0, eolIndex);
-          buffer = buffer.substring(eolIndex + 2);
-          if (line.startsWith("data: ")) {
-            const jsonData = line.substring("data: ".length);
-            try {
-              const eventData = JSON.parse(jsonData);
-              if (eventData.chunk) {
-                currentOutput += eventData.chunk;
-                outputCode.value = currentOutput; // Watcher will update highlightedOutput
-              }
-              if (eventData.error) {
-                // Check if this specific error is already present to avoid duplicates from stream
-                if (!errors.value.includes(eventData.error)) {
-                  errors.value.push(eventData.error);
-                }
-              }
-            } catch (e) {
-              console.error("Failed to parse stream event:", e);
-              if (
-                !errors.value.includes("Error processing translation stream.")
-              ) {
-                // errors.value.push('Error processing translation stream.');
-              }
+        buffer += decoder.decode(value, { stream: true });
+        let lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (data.translated_code) {
+              outputCode.value += data.translated_code;
             }
+            if (data.warnings && data.warnings.length > 0) {
+              errors.value = [
+                ...errors.value,
+                ...data.warnings.map((w: string) => `Warning: ${w}`),
+              ];
+            }
+            if (data.errors && data.errors.length > 0) {
+              errors.value = [
+                ...errors.value,
+                ...data.errors.map((e: string) => String(e)),
+              ];
+            }
+          } catch (e) {
+            // Ignore JSON parse errors for incomplete lines
           }
         }
+      }
+    }
+    // Handle any remaining buffered line
+    if (buffer.trim()) {
+      try {
+        const data = JSON.parse(buffer);
+        if (data.translated_code) {
+          outputCode.value += data.translated_code;
+        }
+        if (data.warnings && data.warnings.length > 0) {
+          errors.value = [
+            ...errors.value,
+            ...data.warnings.map((w: string) => `Warning: ${w}`),
+          ];
+        }
+        if (data.errors && data.errors.length > 0) {
+          errors.value = [
+            ...errors.value,
+            ...data.errors.map((e: string) => String(e)),
+          ];
+        }
+      } catch (e) {
+        // Ignore
       }
     }
     // The watcher handles final highlighting based on outputCode.value

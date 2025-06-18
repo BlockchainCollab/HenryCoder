@@ -1,275 +1,610 @@
+<!-- This is now the single root component for the app -->
 <template>
-  <div class="flex h-screen w-full bg-gradient-to-br from-base to-gray-900 font-sans">
-    <!-- Collapsible Sidebar for Options -->
-    <div class="flex flex-col transition-all duration-300 ease-in-out" :class="{ 'w-64': sidebarOpen, 'w-12': !sidebarOpen }">
-      <div class="flex h-full flex-col bg-base bg-opacity-80 backdrop-blur-md shadow-neon-blue rounded-r-lg text-gray-300">
-        <!-- Sidebar Toggle Button -->
-        <div class="flex items-center p-4 border-b border-gray-700">
-          <button @click="toggleSidebar" class="focus:outline-none text-neon-pink hover:text-neon-blue transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path v-if="sidebarOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-              <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-            </svg>
-          </button>
-          <h1 class="ml-2 text-xl font-semibold text-gradient-neon" v-if="sidebarOpen">Options</h1>
-        </div>
-        
-        <!-- Sidebar Content -->
-        <div class="overflow-y-auto flex-grow" v-if="sidebarOpen">
-          <div class="p-4 text-gray-300">
-            <div class="mb-6">
-              <h2 class="font-medium mb-3 text-neon-blue">Translation Settings</h2>
-              <div class="space-y-3">
-                <div class="flex items-center">
-                  <input id="optimize" type="checkbox" v-model="options.optimize" 
-                    class="mr-2 h-4 w-4 text-neon-pink focus:ring-neon-pink border-gray-600 rounded bg-gray-700 checked:bg-neon-pink transition-all">
-                  <label for="optimize" class="hover:text-neon-pink cursor-pointer">Optimize Code</label>
-                </div>
-                <div class="flex items-center">
-                  <input id="comments" type="checkbox" v-model="options.includeComments" 
-                    class="mr-2 h-4 w-4 text-neon-pink focus:ring-neon-pink border-gray-600 rounded bg-gray-700 checked:bg-neon-pink transition-all">
-                  <label for="comments" class="hover:text-neon-pink cursor-pointer">Include Comments</label>
-                </div>
-                <div class="flex items-center">
-                  <input id="mimic-defaults" type="checkbox" v-model="options.mimicDefaults" 
-                    class="mr-2 h-4 w-4 text-neon-pink focus:ring-neon-pink border-gray-600 rounded bg-gray-700 checked:bg-neon-pink transition-all">
-                  <label for="mimic-defaults" class="hover:text-neon-pink cursor-pointer">Mimic Solidity Defaults</label>
-                </div>
-              </div>
-            </div>
-            
-            <div class="mb-6">
-              <h2 class="font-medium mb-3 text-neon-blue">Additional Options</h2>
-              <div class="space-y-2">
-                <select v-model="options.targetVersion" 
-                  class="block w-full border-gray-600 rounded-md shadow-sm focus:border-neon-blue focus:ring focus:ring-neon-blue focus:ring-opacity-50 bg-gray-700 text-gray-200 py-2 px-3 hover:border-neon-pink transition-colors">
-                  <option value="latest">Latest Ralph Version</option>
-                  <option value="stable">Stable Ralph Version</option>
-                  <option value="legacy">Legacy Version</option>
-                </select>
-              </div>
-            </div>
-            
-            <button 
-              @click="translateCode" 
-              :disabled="loading"
-              class="w-full bg-gradient-to-r from-neon-pink to-neon-blue hover:from-pink-500 hover:to-blue-400 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-neon-pink focus:outline-none focus:ring-2 focus:ring-neon-blue focus:ring-opacity-75 transition-all duration-300 ease-in-out transform hover:scale-105">
-              {{ loading ? 'Translating...' : 'Translate' }}
-            </button>
+  <div
+    class="relative flex flex-col h-screen w-full text-white font-rubik bg-grid-pattern overflow-hidden"
+  >
+    <div
+      class="z-50 flex flex-col flex-1 p-[30px] pb-[0px] relative overflow-y-auto"
+    >
+      <!-- Header -->
+      <header class="pb-8 px-0 sm:px-8 text-center">
+        <div class="flex items-center mb-[60px]">
+          <div class="text-[#E5DED7]">
+            <p class="text-4xl font-bold leading-[29px] font-paytone">HENRY</p>
+            <p class="text-4xl font-bold leading-[29px] font-paytone">CODER</p>
           </div>
+          <span
+            class="text-[60px] font-bold text-[#FF8A00] leading-[60px] font-sans"
+            >{</span
+          >
+        </div>
+        <h1
+          class="text-[44px] h-[135px] xs:h-auto xs:text-[48px] leading-none font-extrabold font-bold mb-[60px] text-[#E5DED7]"
+        >
+          Translate your EVM code to Ralph
+        </h1>
+      </header>
+      <!-- Ticker -->
+      <div
+        class="absolute w-[calc(100%-1px)] rotate-2 top-[320px] xs:top-[280px] lg:top-[250px] bg-gradient-to-r from-[#EF8510] to-[#FCA545] left-0 right-0 text-[#191817] font-extrabold text-[length:24px] [&>span]:leading-none py-2 sm:py-3 overflow-hidden whitespace-nowrap mb-8 z-10 max-w-full"
+        style="overflow-x: hidden"
+      >
+        <div class="animate-marquee flex items-center min-w-full w-full">
+          <span class="mx-4">EVM CODE TO RALPH</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
+          <span class="mx-4">TRY RALPH'S BEST FRIEND</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
+          <span class="mx-4">YOUR EVM CODE TO RALPH</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
+          <span class="mx-4">TRY RALPH'S BEST FRIEND</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
+          <!-- Repeat for continuous scroll -->
+          <span class="mx-4">EVM CODE TO RALPH</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
+          <span class="mx-4">TRY RALPH'S BEST FRIEND</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
+          <span class="mx-4">YOUR EVM CODE TO RALPH</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
+          <span class="mx-4">TRY RALPH'S BEST FRIEND</span>
+          <span class="mx-4 inline-block">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="17"
+              height="17"
+              viewBox="0 0 17 17"
+              fill="none"
+            >
+              <path
+                d="M12.8003 8.50219L16.2587 11.803L12.6236 15.6236L9.09359 11.5365L6.86821 16.6358L2.38891 14.0424L4.77901 10.1946L0.63489 9.18036L1.94633 4.39234L5.48116 5.61409L4.77367 0.964481L9.94282 0.0931173L10.4181 5.15525L13.4365 2.21153L16.3614 6.53744L12.8003 8.50219Z"
+                fill="#191817"
+              />
+            </svg>
+          </span>
         </div>
       </div>
-    </div>
-
-    <!-- Main Content Area -->
-    <div class="flex flex-1 flex-col overflow-hidden p-4">
-      <!-- Header -->
-      <header class="bg-base bg-opacity-50 backdrop-blur-sm shadow-neon-pink rounded-lg mb-4">
-        <div class="px-6 py-4">
-          <h1 class="text-3xl font-bold text-gradient-neon">HenryCoder: Ralph's Best Friend</h1>
-        </div>
-      </header>
-
-      <!-- Main Content -->
-      <main class="flex flex-1 overflow-hidden gap-4">
+      <!-- Main Content Area -->
+      <main
+        class="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-8 px-0 lg:px-8 pb-4 pt-5 sm:pt-[40px] lg:pt-[60px]"
+      >
         <!-- Source Code Panel (Left) -->
-        <div class="w-1/2 overflow-y-auto border border-neon-blue rounded-lg p-4 bg-base bg-opacity-70 backdrop-blur-md shadow-lg">
-          <h2 class="mb-3 text-lg font-medium text-neon-blue">EVM Source Code</h2>
-          <textarea 
-            v-model="sourceCode" 
-            class="h-full w-full rounded-md border border-gray-600 p-3 font-mono text-sm focus:border-neon-pink focus:ring-1 focus:ring-neon-pink focus:outline-none bg-gray-800 text-gray-200 resize-none"
-            placeholder="Paste your EVM code here..."></textarea>
-        </div>
-
-        <!-- Output Panel (Right) -->
-        <div class="w-1/2 overflow-y-auto border border-neon-pink rounded-lg p-4 bg-base bg-opacity-70 backdrop-blur-md shadow-lg">
-          <div class="flex items-center mb-3">
-            <h2 class="text-lg font-medium text-neon-pink">Ralph Output</h2>
-            <button
-              v-if="outputCode"
-              @click="copyTranslatedCode"
-              class="bg-gradient-to-r from-neon-blue to-neon-pink hover:from-blue-400 hover:to-pink-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:shadow-neon-pink focus:outline-none focus:ring-2 focus:ring-neon-pink focus:ring-opacity-75 transition-all duration-300 ease-in-out transform hover:scale-105 ml-auto"
+        <div
+          class="flex-1 flex flex-col gap-y-6 overflow-hidden p-1 min-h-[690px]"
+        >
+          <h2 class="text-[20px] font-medium text-white">EVM Source Code</h2>
+          <div
+            class="flex-1 flex flex-col p-5 rounded-[12px] border border-[#6D5D5D] bg-[#242322] focus-within:shadow-[0_0_6px_1px_#E5DED7] overflow-hidden"
+          >
+            <textarea
+              v-model="sourceCode"
+              class="flex-1 w-full rounded-md placeholder:opacity-60 p-3 font-mono text-sm bg-inherit text-gray-200 resize-none ring-0 outline-none"
+              placeholder="Paste your EVM code here ⬇️"
+            ></textarea>
+            <div
+              class="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
             >
-              {{ copied ? 'Copied!' : 'Copy' }}
-            </button>
+              <div class="flex items-center gap-x-[18px] text-sm text-gray-400">
+                <!-- Translation Options Popover -->
+                <div class="relative flex items-center">
+                  <Popover>
+                    <PopoverTrigger
+                      class="text-sm text-[#E5DED7] hover:text-[#FF8A00] transition-colors self-end p-1.5 rounded-[10px] border border-[#4C4B4B] hover:border-[#FF8A00] shadow-[0_0_6px_2px_rgba(229,222,215,0.20)]"
+                      title="Translation Options"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6 inline"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1"
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </PopoverTrigger>
+
+                    <PopoverContent
+                      align="start"
+                      :side-offset="6"
+                      side="top"
+                      class="flex flex-col gap-y-4 font-sans text-[#E5DED7] text-[length:16px] p-4 rounded-[10px] border border-[#E5DED7] bg-[#312F2D] shadow-[0_0_6px_2px_rgba(229,222,215,0.20)]"
+                    >
+                      <div class="flex items-center gap-3">
+                        <Checkbox
+                          id="custom-checkbox"
+                          v-model:checked="options.optimize"
+                          class="custom-checkbox"
+                        />
+                        <Label for="custom-checkbox" class="checkbox-label"
+                          >Optimize Code</Label
+                        >
+                      </div>
+                      <div class="flex items-center gap-3">
+                        <Checkbox
+                          id="custom-checkbox"
+                          v-model:checked="options.includeComments"
+                          class="custom-checkbox"
+                        />
+                        <Label for="custom-checkbox" class="checkbox-label"
+                          >Include Comments</Label
+                        >
+                      </div>
+                      <div class="flex items-center gap-3">
+                        <Checkbox
+                          id="custom-checkbox"
+                          v-model:checked="options.mimicDefaults"
+                          class="custom-checkbox"
+                        />
+                        <Label for="custom-checkbox" class="checkbox-label"
+                          >Mimic Solidity Defaults</Label
+                        >
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <span class="text-[length:14px] text-[#9E9992]"
+                  >Ralph version: After Danube</span
+                >
+              </div>
+              <button
+                @click="translateCode"
+                :disabled="loading"
+                :class="[
+                  'w-full sm:w-[294px] font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.7)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out',
+                  outputCode && !loading
+                    ? 'bg-transparent border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black'
+                    : 'bg-[#FF8A00] hover:bg-orange-600 text-black',
+                ]"
+              >
+                {{ loading ? "Translating..." : "Translate" }}
+              </button>
+            </div>
           </div>
-          <div class="h-[calc(100%-2.5rem)] overflow-auto rounded-md border border-gray-600 bg-gray-800 p-3">
-            <pre class="font-mono text-sm whitespace-pre-wrap text-gray-300"><code class="hljs language-rust" v-html="highlightedOutput || 'Translation will appear here...'"></code></pre>
+        </div>
+        <!-- Output Panel (Right) -->
+        <div
+          class="flex-1 flex flex-col gap-y-6 bg-[#191817] overflow-hidden p-1 min-h-[690px]"
+        >
+          <h2 class="text-[20px] font-medium text-white">Ralph Output</h2>
+          <div
+            class="flex-1 flex flex-col rounded-[12px] p-4 sm:p-6 border border-[#6D5D5D] overflow-hidden"
+          >
+            <div class="flex-1 overflow-auto min-w-0">
+              <pre
+                v-if="outputCode || loading"
+                class="font-mono text-sm whitespace-pre text-gray-300 w-max"
+              ><code class="hljs !bg-transparent language-rust" :class="{'opacity-50': loading}" v-html="highlightedOutput || (loading ? 'Translating...' : '')"></code></pre>
+              <div
+                v-if="!outputCode && !loading && !errors.length"
+                class="text-gray-500"
+              >
+                Translation will appear here ✨
+              </div>
+              <!-- Error Display Section (Integrated into Output Panel) -->
+              <section v-if="errors.length > 0 && !loading" class="mt-2 p-1">
+                <div
+                  class="text-[#E15959] text-[length:16px] font-semibold bg-[#2A1A1A] rounded-[10px] py-3 px-6 border border-[#E15959] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+                >
+                  <ul>
+                    <li
+                      v-for="(error, index) in errors"
+                      :key="index"
+                      class="font-mono text-xs"
+                    >
+                      {{ error }}
+                    </li>
+                  </ul>
+                </div>
+              </section>
+            </div>
+            <div
+              v-if="outputCode && !loading"
+              class="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            >
+              <button
+                v-if="outputCode && !loading"
+                @click="copyTranslatedCode"
+                class="w-fit text-sm text-[#E5DED7] hover:text-[#FF8A00] transition-colors p-1.5 rounded-[10px] border border-[#4C4B4B] hover:border-[#FF8A00] shadow-[0_0_6px_2px_rgba(229,222,215,0.20)]"
+                title="Copy to clipboard"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-6 w-6 inline"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1"
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              </button>
+              <button
+                @click="downloadTranslatedCode"
+                :disabled="loading"
+                class="w-full sm:w-[294px] bg-[#FBA444] hover:bg-[#FF8A00] text-[#191817] font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.70)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out"
+              >
+                {{ "Download translated code" }}
+              </button>
+            </div>
           </div>
         </div>
       </main>
-
-      <!-- Error Display Section -->
-      <section v-if="errors.length > 0" class="mt-4 p-4 bg-red-900 bg-opacity-70 backdrop-blur-md border border-red-500 rounded-lg shadow-lg text-red-300">
-        <h2 class="text-xl font-semibold mb-2 text-red-400">Errors / Warnings</h2>
-        <div class="max-h-40 overflow-y-auto">
-          <ul>
-            <li v-for="(error, index) in errors" :key="index" class="font-mono text-sm">{{ error }}</li>
-          </ul>
-        </div>
-      </section>
-
-      <!-- Download Option Section -->
-      <section v-if="outputCode && !errors.some(e => !e.toLowerCase().startsWith('warning:'))" class="mt-4 p-4 bg-base bg-opacity-50 backdrop-blur-sm rounded-lg">
-        <button
-          @click="downloadTranslatedCode"
-          class="bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:shadow-neon-blue focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-all duration-300 ease-in-out transform hover:scale-105"
+      <!-- Footer -->
+      <footer class="py-4 text-center text-sm text-gray-500 shrink-0">
+        <span
+          >&copy; {{ new Date().getFullYear() }} HenryCoder. All rights
+          reserved.</span
         >
-          Download Translated Code
-        </button>
-      </section>
+      </footer>
+    </div>
+    <div class="absolute top-0 right-0">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="187"
+        height="236"
+        viewBox="0 0 187 236"
+        fill="none"
+      >
+        <path
+          d="M231.922 54.9325L178.866 106.177L239.39 113.691L239.984 113.765L239.806 114.336L216.964 187.695L216.802 188.218L216.296 188.009L161.628 165.396L155.528 234.789L155.485 235.287L154.987 235.243L77.6806 228.573L77.1305 228.525L77.2316 227.983L91.6237 150.642L13.341 171.714L12.8004 171.86L12.7168 171.305L1.36659 95.9994L1.28944 95.4892L1.80141 95.4286L67.2971 87.6247L41.1666 31.3059L40.9508 30.8399L41.4226 30.6364L108.498 1.7156L108.987 1.50487L109.166 2.00756L127.326 53.0749L173.7 2.8341L174.034 2.47245L174.4 2.80014L231.908 54.1999L232.309 54.558L231.922 54.9325Z"
+          stroke="#EF8510"
+        />
+      </svg>
+    </div>
+    <div class="absolute bottom-0 right-0">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="355"
+        height="319"
+        viewBox="0 0 355 319"
+        fill="none"
+      >
+        <path
+          d="M397.894 92.2581L306.008 181.007L410.958 194.036L411.551 194.11L411.373 194.68L372.049 320.978L371.886 321.5L371.379 321.291L276.807 282.173L266.264 402.132L266.22 402.629L265.722 402.586L132.63 391.1L132.08 391.052L132.181 390.51L157.063 256.797L21.7365 293.222L21.1959 293.368L21.1116 292.814L1.57096 163.166L1.49381 162.655L2.00577 162.595L115.259 149.1L70.0629 51.6897L69.8471 51.2236L70.3189 51.0201L185.797 1.23033L186.286 1.01893L186.465 1.52162L217.93 90.0051L298.172 3.06845L298.506 2.7068L298.873 3.03448L397.88 91.5256L398.281 91.8837L397.894 92.2581Z"
+          stroke="#EF8510"
+        />
+      </svg>
+    </div>
+    <div class="absolute bottom-[200px] right-0">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="227"
+        height="236"
+        viewBox="0 0 227 236"
+        fill="none"
+      >
+        <path
+          d="M231.362 54.752L178.306 105.997L238.83 113.511L239.424 113.585L239.246 114.156L216.404 187.515L216.242 188.037L215.736 187.829L161.068 165.215L154.968 234.609L154.925 235.106L154.427 235.063L77.1205 228.392L76.5705 228.344L76.6716 227.802L91.0636 150.462L12.781 171.534L12.2403 171.679L12.1568 171.125L0.806535 95.819L0.729386 95.3088L1.24135 95.2482L66.7371 87.4443L40.6065 31.1255L40.3907 30.6594L40.8625 30.456L107.938 1.53518L108.427 1.32445L108.606 1.82714L126.766 52.8945L173.14 2.65368L173.474 2.29203L173.84 2.61972L231.348 54.0195L231.749 54.3776L231.362 54.752Z"
+          stroke="#EF8510"
+          stroke-opacity="0.5"
+        />
+      </svg>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
-import hljs from 'highlight.js/lib/core';
-import rust from 'highlight.js/lib/languages/rust';
-import 'highlight.js/styles/cybertopia-dimmer.css';
+import { ref, watch, nextTick, onMounted } from "vue";
+import { useRuntimeConfig } from "#imports";
+import hljs from "highlight.js/lib/core";
+import rust from "highlight.js/lib/languages/rust";
+import "highlight.js/styles/github-dark.css";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
-hljs.registerLanguage('rust', rust);
+hljs.registerLanguage("rust", rust);
 
 // State
-const sidebarOpen = ref(true);
-const sourceCode = ref('');
-const outputCode = ref('');
-const highlightedOutput = ref('');
+const sourceCode = ref("");
+const outputCode = ref(`#[cfg(test)]
+mod test {
+    use solana_program_test::*;
+    use solana_sdk::{
+        instruction::Instruction, pubkey::Pubkey, signature::Signer, transaction::Transaction,
+    };
+
+    #[tokio::test]
+    async fn test_hello_world() {
+        let program_id = Pubkey::new_unique();
+        let mut program_test = ProgramTest::default();
+        program_test.add_program("hello_world", program_id, None);
+        let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
+        // Create instruction
+        let instruction = Instruction {
+            program_id,
+            accounts: vec![],
+            data: vec![],
+        };
+        // Create transaction with instruction
+        let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+
+        // Sign transaction
+        transaction.sign(&[&payer], recent_blockhash);
+
+        let transaction_result = banks_client.process_transaction(transaction).await;
+        assert!(transaction_result.is_ok());
+    }
+}`);
+const highlightedOutput = ref("");
 const loading = ref(false);
-const errors = ref<string[]>([]); // Explicitly type errors as string array
+const errors = ref<string[]>([]);
 const options = ref({
   optimize: false,
   includeComments: true,
-  targetVersion: 'latest',
-  mimicDefaults: false
+  targetVersion: "latest",
+  mimicDefaults: false,
 });
 const copied = ref(false);
 
+const runtimeConfig = useRuntimeConfig();
+
+// Watch for changes in outputCode to update highlightedOutput
+watch(
+  outputCode,
+  (newValue) => {
+    if (newValue) {
+      try {
+        highlightedOutput.value = hljs.highlight(newValue, {
+          language: "rust",
+          ignoreIllegals: true,
+        }).value;
+      } catch (e) {
+        console.error("Highlighting error:", e);
+        highlightedOutput.value = newValue; // Fallback to non-highlighted text
+      }
+    } else {
+      highlightedOutput.value = "";
+    }
+  },
+  { immediate: true }
+);
+
+onMounted(() => {
+  // Add marquee animation style to the document head once component is mounted
+  const styleId = "custom-component-styles"; // Use a more generic ID for all custom styles
+  if (!document.getElementById(styleId)) {
+    const styleElement = document.createElement("style");
+    styleElement.id = styleId;
+    styleElement.innerHTML = `
+      @keyframes marquee {
+        0% { transform: translateX(0%); }
+        100% { transform: translateX(-50%); }
+      }
+      .animate-marquee {
+        display: inline-block;
+        white-space: nowrap;
+        animation: marquee 30s linear infinite;
+      }
+      .bg-grid-pattern {
+        background-color: #191817; /* Base dark background */
+      }
+    `;
+    document.head.appendChild(styleElement);
+  }
+});
+
 // Functions
-const toggleSidebar = () => {
-  sidebarOpen.value = !sidebarOpen.value;
-};
-
-const config = useRuntimeConfig();
-
 const translateCode = async () => {
   loading.value = true;
-  outputCode.value = '';
+  outputCode.value = ""; // Watcher will clear highlightedOutput
   errors.value = [];
+  // highlightedOutput.value = ""; // No longer needed, watcher handles it
 
   try {
-    const response = await fetch(`${config.public.apiBase}/translate/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        source_code: sourceCode.value,
-        options: {
-          optimize: options.value.optimize,
-          include_comments: options.value.includeComments, // maps to include_comments for the API
-          target_version: options.value.targetVersion,
-          mimic_defaults: options.value.mimicDefaults,
+    const response = await fetch(
+      `${runtimeConfig.public.apiBase}/translate/stream`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          code: sourceCode.value,
+          options: options.value,
+        }),
+      }
+    );
 
     if (!response.ok || !response.body) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Translation failed');
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: "Translation failed with non-JSON response" }));
+      throw new Error(errorData.detail || "Translation failed");
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let done = false;
-    let buffer = '';
-    outputCode.value = '';
-    errors.value = [];
+    let buffer = "";
+    let currentOutput = "";
 
     while (!done) {
       const { value, done: streamDone } = await reader.read();
       done = streamDone;
       if (value) {
-        buffer += decoder.decode(value, { stream: true });
-        let lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const data = JSON.parse(line);
-            if (data.translated_code) {
-              outputCode.value += data.translated_code;
+        const decodedChunk = decoder.decode(value, { stream: true });
+        buffer += decodedChunk;
+        let eolIndex;
+        while ((eolIndex = buffer.indexOf("\n\n")) >= 0) {
+          const line = buffer.substring(0, eolIndex);
+          buffer = buffer.substring(eolIndex + 2);
+          if (line.startsWith("data: ")) {
+            const jsonData = line.substring("data: ".length);
+            try {
+              const eventData = JSON.parse(jsonData);
+              if (eventData.chunk) {
+                currentOutput += eventData.chunk;
+                outputCode.value = currentOutput; // Watcher will update highlightedOutput
+              }
+              if (eventData.error) {
+                // Check if this specific error is already present to avoid duplicates from stream
+                if (!errors.value.includes(eventData.error)) {
+                  errors.value.push(eventData.error);
+                }
+              }
+            } catch (e) {
+              console.error("Failed to parse stream event:", e);
+              if (
+                !errors.value.includes("Error processing translation stream.")
+              ) {
+                // errors.value.push('Error processing translation stream.');
+              }
             }
-            if (data.warnings && data.warnings.length > 0) {
-              errors.value = [...errors.value, ...data.warnings.map((w: string) => `Warning: ${w}`)];
-            }
-            if (data.errors && data.errors.length > 0) {
-              errors.value = [...errors.value, ...data.errors.map((e: string) => String(e))];
-            }
-          } catch (e) {
-            // Ignore JSON parse errors for incomplete lines
           }
         }
       }
     }
-    // Handle any remaining buffered line
-    if (buffer.trim()) {
-      try {
-        const data = JSON.parse(buffer);
-        if (data.translated_code) {
-          outputCode.value += data.translated_code;
-        }
-        if (data.warnings && data.warnings.length > 0) {
-          errors.value = [...errors.value, ...data.warnings.map((w: string) => `Warning: ${w}`)];
-        }
-        if (data.errors && data.errors.length > 0) {
-          errors.value = [...errors.value, ...data.errors.map((e: string) => String(e))];
-        }
-      } catch (e) {
-        // Ignore
-      }
+    // The watcher handles final highlighting based on outputCode.value
+    // No need for manual highlightedOutput.value assignment here.
+  } catch (e: any) {
+    console.error("Translation error:", e);
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    if (!errors.value.includes(errorMessage)) {
+      errors.value.push(errorMessage);
     }
-  } catch (error: unknown) {
-    let message = 'Translation failed';
-    if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as any).message === 'string') {
-      message = (error as any).message;
-    }
-    outputCode.value = message;
-    errors.value = [message];
+    // outputCode.value is already empty or will be set by the watcher if cleared.
+    // If an error occurs, outputCode might have partial data or be empty.
+    // The watcher ensures highlightedOutput reflects the current state of outputCode.
+    // No need for: highlightedOutput.value = "";
   } finally {
     loading.value = false;
   }
 };
 
-watch(outputCode, async (newCode) => {
-  await nextTick();
-  if (newCode) {
-    highlightedOutput.value = hljs.highlight(newCode, { language: 'rust' }).value;
-  } else {
-    highlightedOutput.value = '';
+const copyTranslatedCode = () => {
+  if (outputCode.value) {
+    navigator.clipboard
+      .writeText(outputCode.value)
+      .then(() => {
+        copied.value = true;
+        setTimeout(() => {
+          copied.value = false;
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error("Failed to copy: ", err);
+        errors.value.push("Failed to copy code to clipboard.");
+      });
   }
-});
+};
 
-function downloadTranslatedCode() {
-  if (!outputCode.value) return;
-
-  const blob = new Blob([outputCode.value], { type: 'text/plain' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'translated_code.ralph'; // Suggested filename
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(link.href);
-}
-
-function copyTranslatedCode() {
-  if (!outputCode.value) return;
-  navigator.clipboard.writeText(outputCode.value).then(() => {
-    copied.value = true;
-    setTimeout(() => copied.value = false, 1500);
-  });
-}
+const downloadTranslatedCode = () => {
+  if (outputCode.value) {
+    const blob = new Blob([outputCode.value], {
+      type: "text/plain;charset=utf-8",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "translated_code.ralph";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  }
+};
 </script>
 
 <style scoped>
@@ -287,14 +622,61 @@ textarea {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.1);
+  background: #565656;
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #FF00FF, #00FFFF); /* Neon gradient for scrollbar */
+  background: #9e9992; /* Neon gradient for scrollbar */
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, #00FFFF, #FF00FF); /* Swap gradient on hover */
+  background: #9e9992; /* Swap gradient on hover */
+}
+::-webkit-scrollbar-corner {
+  background: rgba(0, 0, 0, 0);
+}
+
+/* Fix for ShadCN Checkbox visibility */
+.custom-checkbox[data-state] {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid #4c4b4b;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border 0.2s;
+  box-shadow: 0px 0px 6px 1px rgba(229, 222, 215, 0.2);
+}
+.custom-checkbox[data-state="checked"] {
+  background-color: #ef8510;
+  border-color: #312f2d;
+  box-shadow: 0 0 10px 1px rgba(239, 133, 16, 0.2);
+  color: #191817;
+}
+.custom-checkbox .shadcn-checkbox-indicator {
+  color: #312f2d;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkbox-label {
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  user-select: none;
+}
+
+/* Global style to clip horizontal overflow for html, body, and main containers */
+html,
+body,
+#__nuxt,
+#__layout,
+.app-root,
+.bg-grid-pattern {
+  overflow-x: hidden !important;
 }
 </style>

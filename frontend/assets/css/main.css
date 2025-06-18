@@ -6,7 +6,12 @@ body {
   @apply bg-base text-gray-300 font-sans; /* Apply Montserrat globally */
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   @apply text-primary font-semibold; /* Ensure headings also use the font */
 }
 

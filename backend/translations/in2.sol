@@ -1,12 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-contract Array {
+interface IStack {
+    event Popped(uint256 value);
+    event Pushed(uint256 value);
+
+    function push(uint256 value) external;
+    function pop() external;
+}
+
+contract Array is IStack {
     // Several ways to initialize an array
     uint256[] public arr;
     uint256[] public arr2 = [1, 2, 3];
     // Fixed sized array, all elements initialize to 0
     uint256[10] public myFixedSizeArr;
+
+    function setFixed(uint256 index, uint256 value) public {
+        // Set value at index in fixed size array
+        myFixedSizeArr[index] = value;
+    }
 
     function get(uint256 i) public view returns (uint256) {
         return arr[i];
@@ -23,7 +36,7 @@ contract Array {
         arr.push(i);
     }
 
-    function pop() public {
+    function pop() external {
         // Remove last element from array
         // This will decrease the array length by 1
         // This will revert if the array is empty

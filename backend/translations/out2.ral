@@ -1,23 +1,25 @@
+Interface IStack {
+    event Popped(value: U256)
+    event Pushed(value: U256)
+
+    @using(updateFields = true)
+    pub fn push(value: U256) -> ()
+    pub fn pop() -> ()
+}
+
+
 // Ralph doesn't have built-in dynamic arrays, so we'll use mappings to simulate them
 Contract Array(
-    mut initialized: Bool,
     mut arrLength: U256,
     mut arr2Length: U256,
     mut myFixedSizeArr: [U256; 10]  // Fixed size array must be declared as contract's field
-) {
+) implements IStack {
+
     // Dynamic array simulation using mapping
     mapping[U256, U256] arr
-    mapping[U256, U256] arr2
+    mapping[U256, U256] arr2  // Defaults aren't supported in Ralph, so are omitted 
 
-    // Initialize arr2 in constructor equivalent
-    @using(updateFields = true, checkExternalCaller = false)
-    pub fn init() -> () {
-        arr2.insert!(0, 1)
-        arr2.insert!(1, 2)
-        arr2.insert!(2, 3)
-        arr2Length = 3
-        initialized = true
-    }
+    // Ralph doesn't support constructors like Solidity so constructor functionality is excluded
 
     @using(updateFields = true, checkExternalCaller = false)
     pub fn setFixed(index: U256, value: U256) -> () {

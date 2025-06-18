@@ -1,7 +1,10 @@
 import os
+import logging
 
 TRANSLATIONS_DIR = os.path.join(os.path.dirname(__file__), "translations")
 DOCS_DIR = os.path.join(os.path.dirname(__file__), "documentation")
+
+logger = logging.getLogger(__name__)
 
 def load_ralph_details() -> str:
     """
@@ -31,22 +34,26 @@ def load_ralph_details() -> str:
                     content = f.read()
                     markdown_content.append(f"--- {filename} ---\n{content}")
             else:
-                print(f"Warning: {filename} not found in documentation directory.")
+                logger.warning(f"{filename} not found in documentation directory.")
         
         # Then add any remaining markdown files
+        extras = []
         for filename in sorted(os.listdir(DOCS_DIR)):
             if filename.endswith('.md') and filename not in priority_files:
                 file_path = os.path.join(DOCS_DIR, filename)
+                extras.append(filename)
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     markdown_content.append(f"--- {filename} ---\n{content}")
+        if extras:
+            logger.info(f"Additional documentation files loaded: {', '.join(extras)}")
         
         if not markdown_content:
             return "No markdown files found in documentation directory."
             
         return "\n\n".join(markdown_content)
     except Exception as e:
-        print(f"Error loading documentation: {e}")
+        logger.error(f"Error loading documentation: {e}")
         raise RuntimeError("Failed to load Ralph details") from e
 
 def load_example_translations() -> str:
@@ -58,8 +65,8 @@ def load_example_translations() -> str:
     concat_parts = []
     
     if not os.path.exists(TRANSLATIONS_DIR):
-        print(f"Translations directory not found: {TRANSLATIONS_DIR}")
-        return ""
+        logger.error(f"Translations directory not found: {TRANSLATIONS_DIR}")
+        raise RuntimeError(f"Critical failure: Translations directory not found at {TRANSLATIONS_DIR}")
     
     i = 1
     while True:
@@ -80,7 +87,7 @@ def load_example_translations() -> str:
             
             i += 1
         except Exception as e:
-            print(f"Error loading example translation pair {i}: {e}")
+            logger.error(f"Error loading example translation pair {i}: {e}")
             raise RuntimeError("Failed to load example translations") from e
     
     if not concat_parts:

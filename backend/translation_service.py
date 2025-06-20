@@ -1,8 +1,10 @@
-import json
+import logging
 import os
+import time
 from typing import AsyncGenerator
 import openai
 from dotenv import load_dotenv
+from api_types import TranslateRequest
 from translation_context import RALPH_DETAILS, EXAMPLE_TRANSLATIONS
 from templates import USER_PROMPT_TEMPLATE, LOG_TEMPLATE
 
@@ -13,6 +15,8 @@ API_URL = os.getenv("API_URL")
 LLM_MODEL = os.getenv("LLM_MODEL")
 TRANSLATIONS_DIR = os.path.join(os.path.dirname(__file__), "translations")
 DOCS_DIR = os.path.join(os.path.dirname(__file__), "documentation")
+DUMP_DIR = os.path.join(os.path.dirname(__file__), "dumps")
+MAX_DUMP_LENGTH = 100000
 
 if API_KEY is None or API_URL is None or LLM_MODEL is None:
     raise RuntimeError(
@@ -98,3 +102,26 @@ async def perform_translation(
             yield translated_code, reasoning, warnings, errors
     except Exception as e:
         raise RuntimeError(f"OpenAI/DeepInfra API request failed: {str(e)}") from e
+
+
+def dump_translation(request: TranslateRequest, translated_code: str) -> None:
+    """
+    Dumps the translation details to a file.
+    """
+    SPACER = "-" * 10
+    content = (
+        f"{SPACER} Options: {SPACER}\n{request.options.model_dump_json(indent=2)}\n"
+        f"{SPACER} Source Code: {SPACER}\n{request.source_code}\n"
+        f"{SPACER} Translated Code: {SPACER}\n{translated_code}\n"
+    )
+    if len(content) > MAX_DUMP_LENGTH:
+        content = content[:MAX_DUMP_LENGTH] + "\n\n[Content truncated due to size limit]"
+
+    try:
+        os.makedirs(DUMP_DIR, exist_ok=True)
+        nanosecond_timestamp = time.time_ns()
+        dump_file = os.path.join(DUMP_DIR, f"translation_{nanosecond_timestamp}.txt")
+        with open(dump_file, "x", encoding="utf-8") as f:
+            f.write(content)
+    except Exception as e:
+        logging.error(f"Failed to dump translation: {e}")

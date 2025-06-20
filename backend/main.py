@@ -6,7 +6,8 @@ import os
 from dotenv import load_dotenv
 
 # Import the translation service
-from translation_service import perform_translation
+from api_types import TranslateRequest, TranslateResponse
+from translation_service import perform_translation, dump_translation
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import json
@@ -25,21 +26,6 @@ app.add_middleware(
     expose_headers=["Content-Length"],  # Headers that can be exposed to the client
     max_age=600,  # How long the results of a preflight request can be cached (in seconds)
 )
-
-class TranslationOptions(BaseModel):
-    optimize: bool = False
-    include_comments: bool = True
-    mimic_defaults: bool = False
-
-class TranslateRequest(BaseModel):
-    source_code: str
-    options: TranslationOptions
-
-class TranslateResponse(BaseModel):
-    translated_code: str
-    reasoning: str
-    warnings: List[str] = []
-    errors: List[str] = []
 
 @app.post("/api/translate")
 async def translate_code(request: TranslateRequest):
@@ -66,8 +52,8 @@ async def translate_code(request: TranslateRequest):
         mimic_defaults=options.mimic_defaults,
         stream=False  # Ensure streaming is off for this endpoint
     ):
-        translated_code += reasoning_chunk
-        reasoning += reasoning
+        translated_code += chunk
+        reasoning += reasoning_chunk
         all_warnings.extend(warnings)
         all_errors.extend(errors)
 
@@ -77,6 +63,7 @@ async def translate_code(request: TranslateRequest):
     
     return TranslateResponse(
         translated_code=translated_code,
+        reasoning=reasoning,
         warnings=all_warnings,
         errors=all_errors
     )
@@ -93,6 +80,7 @@ async def translate_code_stream(request: TranslateRequest):
         raise HTTPException(status_code=400, detail="Please provide EVM code for translation.")
 
     async def translation_generator():
+        complete_code = ""
         async for chunk, reasoning, warnings, errors in perform_translation(
             source_code=source_code,
             optimize=options.optimize,
@@ -100,6 +88,7 @@ async def translate_code_stream(request: TranslateRequest):
             mimic_defaults=options.mimic_defaults,
             stream=True
         ):
+            complete_code += chunk
             data = {
                 "translated_code": chunk,
                 "reasoning_chunk": reasoning,
@@ -107,6 +96,8 @@ async def translate_code_stream(request: TranslateRequest):
                 "errors": errors
             }
             yield json.dumps(data) + "\n"
+        # Dump translation to file
+        dump_translation(request, complete_code)
 
     return StreamingResponse(translation_generator(), media_type="application/json")
 

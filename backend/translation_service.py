@@ -108,11 +108,11 @@ def dump_translation(request: TranslateRequest, translated_code: str) -> None:
     """
     Dumps the translation details to a file.
     """
-    SPACER = "-" * 10
+    sep = "-" * 10  # section separator
     content = (
-        f"{SPACER} Options: {SPACER}\n{request.options.model_dump_json(indent=2)}\n"
-        f"{SPACER} Source Code: {SPACER}\n{request.source_code}\n"
-        f"{SPACER} Translated Code: {SPACER}\n{translated_code}\n"
+        f"{sep} Options: {sep}\n{request.options.model_dump_json(indent=2)}\n"
+        f"{sep} Source Code: {sep}\n{request.source_code}\n"
+        f"{sep} Translated Code: {sep}\n{translated_code}\n"
     )
     if len(content) > MAX_DUMP_LENGTH:
         content = content[:MAX_DUMP_LENGTH] + "\n\n[Content truncated due to size limit]"

@@ -4,11 +4,12 @@
     class="relative flex flex-col h-screen w-full text-white font-rubik bg-grid-pattern overflow-hidden"
   >
     <div
+      @scroll="handleScroll"
       class="z-50 flex flex-col flex-1 p-[30px] pb-[0px] relative overflow-y-auto"
     >
       <!-- Header -->
       <header class="pb-8 px-0 sm:px-8 text-center">
-        <div class="flex items-center mb-[60px]">
+        <div class="flex items-center" :class="{ 'mb-[60px]': !isScrolled }">
           <div class="text-[#E5DED7]">
             <p class="text-4xl font-bold leading-[29px] font-paytone">HENRY</p>
             <p class="text-4xl font-bold leading-[29px] font-paytone">CODER</p>
@@ -19,14 +20,16 @@
           >
         </div>
         <h1
-          class="text-[44px] h-[135px] xs:h-auto xs:text-[48px] leading-none font-extrabold font-bold mb-[60px] text-[#E5DED7]"
+          :class="{ 'opacity-0 pointer-events-none hidden': isScrolled }"
+          class="text-[44px] h-[135px] xs:h-auto xs:text-[48px] leading-none font-extrabold font-bold mb-[60px] text-[#E5DED7] transition-opacity duration-300"
         >
           Translate your EVM code to Ralph
         </h1>
       </header>
       <!-- Ticker -->
       <div
-        class="absolute w-[calc(100%-1px)] rotate-2 top-[320px] xs:top-[280px] lg:top-[250px] bg-gradient-to-r from-[#EF8510] to-[#FCA545] left-0 right-0 text-[#191817] font-extrabold text-[length:24px] [&>span]:leading-none py-2 sm:py-3 overflow-hidden whitespace-nowrap mb-8 z-10 max-w-full"
+        :class="{ 'opacity-0 pointer-events-none hidden': isScrolled }"
+        class="absolute w-[calc(100%-1px)] rotate-2 top-[320px] xs:top-[280px] lg:top-[250px] bg-gradient-to-r from-[#EF8510] to-[#FCA545] left-0 right-0 text-[#191817] font-extrabold text-[length:24px] [&>span]:leading-none py-2 sm:py-3 overflow-hidden whitespace-nowrap mb-8 z-10 max-w-full transition-opacity duration-300"
         style="overflow-x: hidden"
       >
         <div class="animate-marquee flex items-center min-w-full w-full">
@@ -155,7 +158,8 @@
       </div>
       <!-- Main Content Area -->
       <main
-        class="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-8 px-0 lg:px-8 pb-4 pt-5 sm:pt-[40px] lg:pt-[60px]"
+        class="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-8"
+        :class="{ 'pt-5 sm:pt-[40px] lg:pt-[60px]': !isScrolled }"
       >
         <!-- Source Code Panel (Left) -->
         <div
@@ -171,8 +175,44 @@
               placeholder="Paste your EVM code here ⬇️"
             ></textarea>
             <div
-              class="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              class="relative mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
             >
+              <div
+                v-if="consentOpen"
+                class="absolute -translate-y-[100%] -top-[16px] p-3 pl-6 flex gap-x-[10px] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)]"
+              >
+                <p
+                  class="text-[#EF8510] text-[length:16px] font-semibold leading-6"
+                >
+                  By clicking <span class="text-[#F3BA7B]">Translate</span>, you
+                  consent to AI analysis and processing of your submitted
+                  content.
+                </p>
+                <button class="h-fit w-fit" @click="closeConsent">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="21"
+                    viewBox="0 0 20 21"
+                    fill="none"
+                  >
+                    <path
+                      d="M15 5.34399L5 15.344"
+                      stroke="#EF8510"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M5 5.34399L15 15.344"
+                      stroke="#EF8510"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
               <div class="flex items-center gap-x-[18px] text-sm text-gray-400">
                 <!-- Translation Options Popover -->
                 <div class="relative flex items-center">
@@ -244,31 +284,40 @@
                     >
                       <div class="flex items-center gap-3">
                         <Checkbox
-                          id="custom-checkbox"
-                          v-model:checked="options.optimize"
+                          id="optimize"
+                          :model-value="options.optimize"
+                          @update:model-value="
+                            (val) => (options.optimize = Boolean(val))
+                          "
                           class="custom-checkbox"
                         />
-                        <Label for="custom-checkbox" class="checkbox-label"
+                        <Label for="optimize" class="checkbox-label"
                           >Optimize Code</Label
                         >
                       </div>
                       <div class="flex items-center gap-3">
                         <Checkbox
-                          id="custom-checkbox"
-                          v-model:checked="options.includeComments"
+                          id="includeComments"
+                          :model-value="options.includeComments"
+                          @update:model-value="
+                            (val) => (options.includeComments = Boolean(val))
+                          "
                           class="custom-checkbox"
                         />
-                        <Label for="custom-checkbox" class="checkbox-label"
+                        <Label for="includeComments" class="checkbox-label"
                           >Include Comments</Label
                         >
                       </div>
                       <div class="flex items-center gap-3">
                         <Checkbox
-                          id="custom-checkbox"
-                          v-model:checked="options.mimicDefaults"
+                          id="mimicDefaults"
+                          :model-value="options.mimicDefaults"
+                          @update:model-value="
+                            (val) => (options.mimicDefaults = Boolean(val))
+                          "
                           class="custom-checkbox"
                         />
-                        <Label for="custom-checkbox" class="checkbox-label"
+                        <Label for="mimicDefaults" class="checkbox-label"
                           >Mimic Solidity Defaults</Label
                         >
                       </div>
@@ -296,11 +345,11 @@
         </div>
         <!-- Output Panel (Right) -->
         <div
-          class="flex-1 flex flex-col gap-y-6 bg-[#191817] overflow-hidden p-1 min-h-[690px]"
+          class="flex-1 flex flex-col gap-y-6 overflow-hidden p-1 min-h-[690px]"
         >
           <h2 class="text-[20px] font-medium text-white">Ralph Output</h2>
           <div
-            class="flex-1 flex flex-col rounded-[12px] p-4 sm:p-6 border border-[#6D5D5D] overflow-hidden"
+            class="flex-1 flex flex-col rounded-[12px] p-4 bg-[#191817] sm:p-6 border border-[#6D5D5D] overflow-hidden"
           >
             <div class="flex-1 overflow-auto min-w-0">
               <pre
@@ -366,12 +415,68 @@
           </div>
         </div>
       </main>
-      <!-- Footer -->
-      <footer class="py-4 text-center text-sm text-gray-500 shrink-0">
-        <span
-          >&copy; {{ new Date().getFullYear() }} HenryCoder. All rights
-          reserved.</span
+      <div class="py-[80px] flex flex-col items-center max-w-[516px] mx-auto">
+        <h2
+          class="text-[length:28px] xs:text-[length:36px] font-medium text-white mb-5 text-center"
         >
+          Looking for more innovative blockchain products?
+        </h2>
+        <p class="text-white text-[length:16px] mb-[36px] text-center">
+          Browse our expanded ecosystem of blockchain and AI-driven products for
+          power users and developers.
+        </p>
+        <a
+          href="https://blockchain-collab.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          :class="[
+            'w-full sm:w-[294px] text-center font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.7)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out',
+            !!outputCode && !loading
+              ? 'bg-transparent border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black'
+              : 'bg-[#FF8A00] hover:bg-orange-600 text-black',
+          ]"
+        >
+          Explore Blockchain Collab
+        </a>
+      </div>
+      <!-- Footer -->
+      <footer class="w-full shrink-0 px-0 sm:px-8 pb-6 pt-4">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-x-2">
+            <span class="text-sm text-gray-400">Powered by</span>
+            <div class="flex items-center gap-x-1">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="49"
+                viewBox="0 0 12 49"
+                fill="none"
+              >
+                <path
+                  d="M5.97098 48.546H1.04833C0.784143 48.546 0.610245 48.4992 0.526641 48.4056C0.44638 48.3086 0.40625 48.1297 0.40625 47.8705V1.27929C0.40625 1.02178 0.44638 0.844541 0.526641 0.750904C0.610245 0.653923 0.784143 0.60376 1.04833 0.60376H6.15156C8.17145 0.60376 9.65627 1.17562 10.606 2.31598C11.0107 2.7942 11.3083 3.31757 11.4956 3.88775C11.6862 4.45961 11.7832 5.02979 11.7832 5.59998V18.8697C11.7832 19.4633 11.7648 20.0051 11.7297 20.495C11.6929 20.9816 11.6528 21.4247 11.6093 21.826C11.4387 22.8259 11.0224 23.5884 10.3586 24.1134C11.0224 24.6134 11.4387 25.3273 11.6093 26.2537C11.6528 26.6115 11.6929 27.0095 11.7297 27.4509C11.7648 27.889 11.7832 28.3672 11.7832 28.8889V43.5498C11.7832 44.0983 11.6862 44.6584 11.4956 45.2286C11.3083 45.8005 11.0107 46.3238 10.606 46.8004C9.58437 47.9641 8.03936 48.546 5.97098 48.546ZM6.07799 3.78074H4.01128V22.6152H6.29202C7.19662 22.6152 7.77851 22.234 8.03769 21.4715C8.15808 21.0936 8.21827 20.6655 8.21827 20.1873C8.21827 19.7108 8.21827 19.4248 8.21827 19.3312V5.63342C8.21827 5.11172 8.03936 4.67364 7.6832 4.31581C7.32537 3.95965 6.7903 3.78074 6.07799 3.78074ZM6.29202 25.645H4.01128V45.3691H6.07799C6.7903 45.3691 7.32537 45.1918 7.6832 44.834C8.03936 44.4778 8.21827 44.0381 8.21827 43.5164V28.929C8.21827 28.832 8.21827 28.5394 8.21827 28.0529C8.21827 27.5679 8.15808 27.1332 8.03769 26.7486C7.80025 26.0129 7.21836 25.645 6.29202 25.645Z"
+                  fill="white"
+                />
+              </svg>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="51"
+                viewBox="0 0 12 51"
+                fill="none"
+              >
+                <path
+                  d="M6.11363 0.928223C7.80244 0.928223 9.19362 1.4031 10.2872 2.35285C11.2854 3.28086 11.7854 4.46972 11.7854 5.91775V22.01C11.7854 22.3411 11.5847 22.5049 11.1834 22.5049H9.68522C9.32739 22.5049 8.99297 22.4113 8.68196 22.224C8.3743 22.0334 8.22046 21.7341 8.22046 21.3278V6.02476C8.22046 5.50307 8.04155 5.06498 7.68539 4.70715C7.32757 4.351 6.7925 4.17208 6.08018 4.17208C5.3662 4.17208 4.83615 4.351 4.48835 4.70715C4.1439 5.06498 3.97335 5.50307 3.97335 6.02476V45.125C3.97335 45.6467 4.15059 46.0814 4.50842 46.4292C4.86457 46.7737 5.39964 46.9442 6.11363 46.9442C6.85269 46.9442 7.38776 46.767 7.71884 46.4092C8.05325 46.053 8.22046 45.625 8.22046 45.125V29.8554C8.22046 29.4508 8.3743 29.1532 8.68196 28.9659C8.99297 28.7753 9.32739 28.6783 9.68522 28.6783H11.1433C11.5713 28.6783 11.7854 28.8455 11.7854 29.1799V45.1919C11.7854 46.6466 11.267 47.8371 10.2337 48.7635C9.19864 49.6898 7.80244 50.1547 6.04674 50.1547C4.30776 50.1547 2.92661 49.6764 1.90664 48.7234C0.884988 47.8455 0.375 46.6683 0.375 45.1919V5.91775C0.375 4.41955 0.884988 3.23237 1.90664 2.35285C2.95337 1.4031 4.35626 0.928223 6.11363 0.928223Z"
+                  fill="#F08507"
+                />
+              </svg>
+            </div>
+          </div>
+          <div>
+            <a href="#" class="text-sm text-[#FCA545] hover:underline"
+              >Privacy Policy</a
+            >
+          </div>
+        </div>
       </footer>
     </div>
     <div class="absolute top-0 right-0">
@@ -422,6 +527,7 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useRuntimeConfig } from "#imports";
 import hljs from "highlight.js/lib/core";
 import rust from "highlight.js/lib/languages/rust";
@@ -445,12 +551,25 @@ const errors = ref<string[]>([]);
 const options = ref({
   optimize: false,
   includeComments: true,
-  targetVersion: "latest",
   mimicDefaults: false,
 });
 const copied = ref(false);
+const isScrolled = ref(false);
+const consentOpen = ref(true);
+const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 
 const runtimeConfig = useRuntimeConfig();
+
+const handleScroll = (event: Event) => {
+  return null; // Prevent default scroll behavior
+
+  if (isLargeScreen.value) {
+    const target = event.target as HTMLElement;
+    isScrolled.value = target.scrollTop > 20;
+  } else {
+    isScrolled.value = false;
+  }
+};
 
 // Watch for changes in outputCode to update highlightedOutput
 watch(
@@ -472,6 +591,12 @@ watch(
   },
   { immediate: true }
 );
+
+watch(isLargeScreen, (isLarge) => {
+  if (!isLarge) {
+    isScrolled.value = false;
+  }
+});
 
 onMounted(() => {
   // Add marquee animation style to the document head once component is mounted
@@ -498,6 +623,10 @@ onMounted(() => {
 });
 
 // Functions
+const closeConsent = () => {
+  consentOpen.value = false;
+};
+
 const translateCode = async () => {
   loading.value = true;
   outputCode.value = ""; // Watcher will clear highlightedOutput
@@ -534,7 +663,6 @@ const translateCode = async () => {
     const decoder = new TextDecoder();
     let done = false;
     let buffer = "";
-    let currentOutput = "";
     outputCode.value = "";
     errors.value = [];
 

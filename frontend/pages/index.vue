@@ -92,7 +92,7 @@
       <main class="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-8"
         :class="{ 'pt-5 sm:pt-[40px] lg:pt-[60px]': !isScrolled }">
         <!-- Source Code Panel (Left) -->
-        <div class="flex-1 flex flex-col gap-y-6 overflow-hidden p-1 min-h-[690px]">
+        <div class="flex-1 flex flex-col gap-y-6 overflow-hidden p-1 h-[690px] min-h-[690px]">
           <h2 class="text-[20px] font-medium text-white">EVM Source Code</h2>
           <div
             class="flex-1 flex flex-col p-5 rounded-[12px] border border-[#6D5D5D] bg-[#242322] focus-within:shadow-[0_0_6px_1px_#E5DED7] overflow-hidden">
@@ -101,7 +101,7 @@
               placeholder="Paste your EVM code here ⬇️"></textarea>
             <div class="relative mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div v-if="consentOpen"
-                class="absolute -translate-y-[100%] -top-[16px] p-3 pl-6 flex gap-x-[10px] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)]">
+                class="absolute -translate-y-[100%] -top-[16px] p-3 pl-6 flex gap-x-[10px] bg-[#2A231A] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)]">
                 <p class="text-[#EF8510] text-[length:16px] font-semibold leading-6">
                   By clicking <span class="text-[#F3BA7B]">Translate</span>, you
                   consent to AI analysis and processing of your submitted
@@ -141,19 +141,19 @@
                       <div class="flex items-center gap-3">
                         <Checkbox id="optimize" :model-value="options.optimize" @update:model-value="
                           (val) => (options.optimize = Boolean(val))
-                        " class="custom-checkbox" />
+                          " class="custom-checkbox" />
                         <Label for="optimize" class="checkbox-label">Optimize Code</Label>
                       </div>
                       <div class="flex items-center gap-3">
                         <Checkbox id="includeComments" :model-value="options.includeComments" @update:model-value="
                           (val) => (options.includeComments = Boolean(val))
-                        " class="custom-checkbox" />
+                          " class="custom-checkbox" />
                         <Label for="includeComments" class="checkbox-label">Include Comments</Label>
                       </div>
                       <div class="flex items-center gap-3">
                         <Checkbox id="mimicDefaults" :model-value="options.mimicDefaults" @update:model-value="
                           (val) => (options.mimicDefaults = Boolean(val))
-                        " class="custom-checkbox" />
+                          " class="custom-checkbox" />
                         <Label for="mimicDefaults" class="checkbox-label">Mimic Solidity Defaults</Label>
                       </div>
                     </PopoverContent>
@@ -166,18 +166,18 @@
                 !!outputCode && !loading
                   ? 'bg-transparent border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black'
                   : 'bg-[#FF8A00] hover:bg-orange-600 text-black',
-              ]">
+                ]">
                 {{ loading ? "Translating..." : "Translate" }}
               </button>
             </div>
           </div>
         </div>
         <!-- Output Panel (Right) -->
-        <div class="flex-1 flex flex-col gap-y-6 overflow-hidden p-1 min-h-[690px]">
+        <div class="flex-1 flex flex-col gap-y-6 overflow-hidden p-1 h-[690px] min-h-[690px]">
           <h2 class="text-[20px] font-medium text-white">Ralph Output</h2>
           <div
             class="flex-1 flex flex-col rounded-[12px] p-4 bg-[#191817] sm:p-6 border border-[#6D5D5D] overflow-hidden">
-            <div class="flex-1 overflow-auto min-w-0">
+            <div ref="outputContainer" class="flex-1 overflow-auto min-w-0">
               <pre v-if="outputCode || loading"
                 class="font-mono text-sm whitespace-pre text-gray-300 w-max"><code class="hljs !bg-transparent language-rust" :class="{ 'opacity-50': loading }" v-html="highlightedOutput || (loading ? 'Translating...' : '')"></code></pre>
               <div v-if="!outputCode && !loading && !errors.length" class="text-gray-500">
@@ -227,7 +227,7 @@
           !!outputCode && !loading
             ? 'bg-transparent border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black'
             : 'bg-[#FF8A00] hover:bg-orange-600 text-black',
-        ]">
+          ]">
           Explore Blockchain Collab
         </a>
       </div>
@@ -311,6 +311,7 @@ const copied = ref(false);
 const isScrolled = ref(false);
 const consentOpen = ref(true);
 const isLargeScreen = useMediaQuery("(min-width: 1024px)");
+const outputContainer = ref<HTMLElement | null>(null);
 
 const runtimeConfig = useRuntimeConfig();
 
@@ -330,6 +331,13 @@ const handleScroll = (event: Event) => {
 watch(
   outputCode,
   (newValue) => {
+    const el = outputContainer.value;
+    // Stay at bottom if already there, otherwise stay where user scrolled to.
+    // Check before DOM update.
+    const isScrolledToBottom = el
+      ? el.scrollHeight - el.scrollTop <= el.clientHeight + 10 // 10px tolerance
+      : true;
+
     if (newValue) {
       try {
         highlightedOutput.value = hljs.highlight(newValue, {
@@ -342,6 +350,15 @@ watch(
       }
     } else {
       highlightedOutput.value = "";
+    }
+
+    if (isScrolledToBottom) {
+      // After DOM is updated, scroll to bottom.
+      nextTick(() => {
+        if (el) {
+          el.scrollTop = el.scrollHeight;
+        }
+      });
     }
   },
   { immediate: true }

@@ -1,16 +1,9 @@
 <template>
-  <div>
-    <NuxtPage />
-  </div>
+  <!-- <NuxtLayout :name="layout"> -->
+  <NuxtPage />
+  <!-- </NuxtLayout> -->
 </template>
 
 <script setup lang="ts">
-// You can add any global setup logic here if needed in the future.
+const layout = "default";
 </script>
-
-<style>
-/* Global styles can remain here or be moved to a dedicated CSS file if preferred */
-.bg-base {
-  background-color: black;
-}
-</style>

@@ -8,7 +8,7 @@
       </p>
       <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">1. Information We Collect</h2>
       <h3 class="font-semibold text-gray-200 mb-1">a. Inputs and Code Submissions</h3>
-      <p class="mb-2 text-gray-300">When you use HenryCoder, any code or text you submit ("Inputs") is collected and stored by us. We retain all submitted Inputs for the purposes described below. <b>Do not submit confidential or sensitive information.</b></p>
+      <p class="mb-2 text-gray-300">When you use HenryCoder, any code or text you submit ("Inputs") is collected and stored by us. Input code is anonymized and is not linked to your IP address or any personally identifiable information. We retain all submitted Inputs for the purposes described below. <b>Do not submit confidential or sensitive information.</b></p>
       <h3 class="font-semibold text-gray-200 mb-1">b. Personal Data</h3>
       <p class="mb-2 text-gray-300">We may collect personal data you provide, such as your name, email address, wallet address, or contact details if you contact us or register for an account. We may also collect technical data (such as IP address, browser type, device information, and usage data) automatically when you use our Site.</p>
       <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">2. How We Use Your Information</h2>
@@ -37,11 +37,26 @@
       <p class="mb-4 text-gray-300">We implement reasonable security measures to protect your information. However, no method of transmission or storage is completely secure. You use the Service at your own risk.</p>
       <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">7. International Data Transfers</h2>
       <p class="mb-4 text-gray-300">Your information may be transferred to and processed in countries outside your country of residence, including the European Economic Area (EEA) and the United States. We take steps to ensure adequate protection for such transfers as required by law.</p>
-      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">8. Children’s Privacy</h2>
-      <p class="mb-4 text-gray-300">The Service is not intended for children under 16. We do not knowingly collect personal data from children under 16.</p>
-      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">9. Changes to This Policy</h2>
+      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">8. Legal Basis for Processing</h2>
+      <p class="mb-4 text-gray-300">We process your personal data based on one or more of the following legal bases, as required by the General Data Protection Regulation (GDPR): (a) your consent; (b) performance of a contract; (c) compliance with a legal obligation; and/or (d) our legitimate interests, provided these do not override your rights and freedoms.</p>
+      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">9. Your Rights Under GDPR</h2>
+      <ul class="list-disc pl-6 mb-4 text-gray-300">
+        <li>Right to access your personal data</li>
+        <li>Right to rectification of inaccurate data</li>
+        <li>Right to erasure ("right to be forgotten")</li>
+        <li>Right to restriction of processing</li>
+        <li>Right to data portability</li>
+        <li>Right to object to processing</li>
+        <li>Right to withdraw consent at any time (where processing is based on consent)</li>
+        <li>Right to lodge a complaint with a supervisory authority</li>
+      </ul>
+      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">10. International Data Transfers Safeguards</h2>
+      <p class="mb-4 text-gray-300">Where we transfer your personal data outside the European Economic Area (EEA), we ensure appropriate safeguards are in place, such as Standard Contractual Clauses approved by the European Commission, to protect your data in accordance with GDPR requirements.</p>
+      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">11. Controller and Processor Roles</h2>
+      <p class="mb-4 text-gray-300">HenryCoder acts as a data controller for your personal data. Our third-party service provider, OpenRouter, acts as a data processor. Please review their privacy policy for more information on their data handling practices.</p>
+      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">12. Changes to This Policy</h2>
       <p class="mb-4 text-gray-300">We may update this Privacy Policy from time to time. We will notify you of material changes by updating the date at the top of this page or by other reasonable means. Your continued use of the Service after changes become effective constitutes your acceptance of the new policy.</p>
-      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">10. Contact Us</h2>
+      <h2 class="text-xl font-semibold text-[#FBA444] mt-6 mb-2">13. Contact Us</h2>
       <p class="mb-4 text-gray-300">If you have questions or requests regarding this Privacy Policy, please contact us at <a href="mailto:info@blockchain-collab.com" class="text-[#FBA444] underline">info@blockchain-collab.com</a>.</p>
       <p class="text-gray-400 text-sm mt-2 text-center">&copy; 2025 HenryCoder. All rights reserved.</p>
     </div>

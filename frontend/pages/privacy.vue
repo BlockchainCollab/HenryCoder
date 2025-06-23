@@ -60,15 +60,9 @@
       <p class="mb-4 text-gray-300">If you have questions or requests regarding this Privacy Policy, please contact us at <a href="mailto:info@blockchain-collab.com" class="text-[#FBA444] underline">info@blockchain-collab.com</a>.</p>
       <p class="text-gray-400 text-sm mt-2 text-center">&copy; 2025 HenryCoder. All rights reserved.</p>
     </div>
-  </div>
+  </NuxtLayout>
 </template>
 
-<script setup lang="ts">
-// No additional logic needed for static Privacy Policy page
-</script>
+<script setup lang="ts"></script>
 
-<style scoped>
-.bg-grid-pattern {
-  background-color: #191817;
-}
-</style>
+<style lang="postcss"></style>

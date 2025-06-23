@@ -153,7 +153,7 @@
         >
           <textarea
             v-model="sourceCode"
-            class="flex-1 w-full rounded-md placeholder:opacity-60 font-menlo placeholder:font-menlo placeholder:text-[length:18px] p-3 text-[length:16px] bg-inherit text-gray-200 resize-none ring-0 outline-none"
+            class="flex-1 w-full rounded-md placeholder:opacity-60 font-menlo placeholder:font-menlo placeholder:text-[length:18px] text-[length:16px] bg-inherit text-gray-200 resize-none ring-0 outline-none"
             placeholder="Paste your EVM code here ⬇️"
           ></textarea>
           <div

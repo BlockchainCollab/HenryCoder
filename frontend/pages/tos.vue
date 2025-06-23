@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout name="default">
     <div
-      class="flex flex-col min-h-screen w-full text-white font-rubik bg-transparent p-8 items-center justify-center"
+      class="flex flex-col min-h-screen w-full text-white font-rubik bg-transparent items-center justify-center"
     >
       <div
         class="max-w-2xl w-full bg-[#191817] border border-[#6D5D5D] rounded-[12px] p-8 shadow-lg"
@@ -154,6 +154,4 @@
 
 <script setup lang="ts"></script>
 
-<style lang="postcss">
-.
-</style>
+<style lang="postcss"></style>

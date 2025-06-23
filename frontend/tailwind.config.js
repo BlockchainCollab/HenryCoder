@@ -16,8 +16,8 @@ module.exports = {
         sans: ["Montserrat", "sans-serif"],
         paytone: ["Paytone One", "sans-serif"],
         rubik: ["Rubik", "sans-serif"],
+        menlo: ["Menlo", "sans-serif"],
         mono: [
-          "Menlo",
           "Monaco",
           "Consolas",
           'Liberation Mono"',

@@ -167,7 +167,7 @@
                 class="text-[#EF8510] text-[length:16px] font-semibold leading-6"
               >
                 By clicking <span class="text-[#F3BA7B]">Translate</span>, you
-                consent to AI analysis and processing of your submitted content.
+                consent to <a href="/tos" target="_blank" class="underline text-[#F3BA7B] hover:text-[#EF8510]">Terms of Service</a> and <a href="/privacy" target="_blank" class="underline text-[#F3BA7B] hover:text-[#EF8510]">privacy&nbsp;policy</a>.
               </p>
               <button class="h-fit w-fit" @click="closeConsent">
                 <svg

@@ -4,13 +4,6 @@ struct Book {
   mut status: U256  // BookStatus
 }
 
-enum ErrorCodes {
-  BookNotFound = 0
-  BookBorrowed
-  BookListFull
-  OnlyMasterCanAdd
-}
-
 Contract BookShelf(master: Address, mut bookListLength: U256) {
   mapping[U256, Book] bookList
 
@@ -22,6 +15,13 @@ Contract BookShelf(master: Address, mut bookListLength: U256) {
   enum BookStatus {
     Available = 0
     Borrowed
+  }
+
+  enum ErrorCodes {
+    BookNotFound = 0
+    BookBorrowed
+    BookListFull
+    OnlyMasterCanAdd
   }
 
   @using(checkExternalCaller = false, updateFields = true)

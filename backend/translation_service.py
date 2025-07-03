@@ -34,11 +34,8 @@ SYSTEM_PROMPT = (
 
 
 async def perform_translation(
-    source_code: str,
-    optimize: bool,
-    include_comments: bool,
-    mimic_defaults: bool = False,
-    stream: bool = False,
+    translate_request: TranslateRequest,
+    stream: bool
 ) -> AsyncGenerator[tuple[str, str, list[str], list[str]], None]:
     """
     Performs the translation using OpenAI-compatible API via the OpenAI Python client.
@@ -46,6 +43,11 @@ async def perform_translation(
     """
     warnings: list[str] = []
     errors: list[str] = []
+    optimize = translate_request.options.optimize
+    include_comments = translate_request.options.include_comments
+    mimic_defaults = translate_request.options.mimic_defaults
+    source_code = translate_request.source_code
+    previous = translate_request.previous_translation
 
     print(
         LOG_TEMPLATE.format(
@@ -69,12 +71,31 @@ async def perform_translation(
         api_key=API_KEY, base_url=API_URL.replace("/chat/completions", "")
     )
 
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    if previous:
+        messages.append(
+            {
+                "role": "assistant",
+                "content": previous.source_code
+            }
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"The code produced the following erors: {"\n\n".join(previous.errors)}\n\n"
+                    "Fix the translation. Only return the corrected code without any additional text."
+                )
+            }
+        )
+
     common_parameters = {
         "model": LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
+        "messages": messages,
         "max_tokens": 32000,
         "temperature": 0.0,
     }

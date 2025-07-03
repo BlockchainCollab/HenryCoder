@@ -302,6 +302,18 @@
                         >Mimic Solidity Defaults</Label
                       >
                     </div>
+                    <hr class="my-0 border-t border-[#4C4B4B] opacity-60" />
+                    <div class="flex items-center gap-3">
+                      <Checkbox
+                        id="autoCompile"
+                        :model-value="options.autoCompile"
+                        @update:model-value="(val) => (options.autoCompile = Boolean(val))"
+                        class="custom-checkbox"
+                      />
+                      <Label for="autoCompile" class="checkbox-label"
+                        >Auto-compile</Label
+                      >
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
@@ -343,10 +355,23 @@
             >
               Translation will appear here ✨
             </div>
+            <!-- Success Display Section -->
+            <section v-if="errors.length === 0 && compiled && !loading" class="mt-2 p-1">
+              <div
+                class="text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+              >
+                <ul>
+                  <li class="font-mono text-xs">Compilation successful!</li>
+                </ul>
+              </div>
+            </section>
             <!-- Error Display Section (Integrated into Output Panel) -->
             <section v-if="errors.length > 0 && !loading" class="mt-2 p-1">
               <div
-                class="text-[#E15959] text-[length:16px] font-semibold bg-[#2A1A1A] rounded-[10px] py-3 px-6 border border-[#E15959] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+                :class="[
+                  'text-[#E15959] border-[#E15959] bg-[#2A1A1A]',
+                  'text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto',
+                ]"
               >
                 <ul>
                   <li
@@ -354,7 +379,7 @@
                     :key="index"
                     class="font-mono text-xs"
                   >
-                    {{ error }}
+                    {{ typeof error === 'object' && (error as any).success ? (error as any).message : error }}
                   </li>
                 </ul>
               </div>
@@ -385,13 +410,33 @@
                 />
               </svg>
             </button>
-            <button
-              @click="downloadTranslatedCode"
-              :disabled="loading"
-              class="w-full sm:w-[294px] bg-[#FBA444] hover:bg-[#FF8A00] text-[#191817] font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.70)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out"
-            >
-              {{ "Download translated code" }}
-            </button>
+            <div class="flex flex-row gap-2 w-full sm:w-auto justify-end">
+              <button
+                v-if="!compiled && !options.autoCompile"
+                title="Compile the contract to check for errors"
+                @click="compileTranslatedCode"
+                :disabled="loading"
+                class="w-full sm:w-[180px] bg-[#191817] border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.70)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out"
+              >
+                {{ "Compile" }}
+              </button>
+              <button
+                v-if="compiled && errors.length > 0"
+                title="Try to fix the errors with another iteration"
+                @click="upgradeTranslatedCode"
+                :disabled="loading"
+                class="w-full sm:w-[180px] bg-[#191817] border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.70)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out"
+              >
+                {{ "Upgrade" }}
+              </button>
+              <button
+                @click="downloadTranslatedCode"
+                :disabled="loading"
+                class="w-full sm:w-[294px] bg-[#FBA444] hover:bg-[#FF8A00] text-[#191817] font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.70)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out"
+              >
+                {{ "Download translated code" }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -482,6 +527,11 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  translateCode as apiTranslateCode,
+  compileTranslatedCode as apiCompileTranslatedCode,
+} from "@/lib/api";
+import type { PreviousTranslation } from "@/lib/api";
 
 hljs.registerLanguage("rust", rust);
 
@@ -490,11 +540,16 @@ const sourceCode = ref("");
 const outputCode = ref(``);
 const highlightedOutput = ref("");
 const loading = ref(false);
+const compiled = ref(false);
+const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
 const options = ref({
+  // translation options
   optimize: false,
   includeComments: true,
   mimicDefaults: false,
+  // peripheral options
+  autoCompile: true,
 });
 const copied = ref(false);
 const isScrolled = ref(false);
@@ -588,115 +643,28 @@ const closeConsent = () => {
   consentOpen.value = false;
 };
 
-const translateCode = async () => {
+const translateCodeInner = async (initialOutputCode: string, previousTranslation?: PreviousTranslation) => {
   loading.value = true;
-  outputCode.value = ""; // Watcher will clear highlightedOutput
+  compiled.value = false;
   errors.value = [];
-  // highlightedOutput.value = ""; // No longer needed, watcher handles it
-
-  try {
-    const response = await fetch(
-      `${runtimeConfig.public.apiBase}/translate/stream`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          source_code: sourceCode.value,
-          options: {
-            optimize: options.value.optimize,
-            include_comments: options.value.includeComments, // maps to include_comments for the API
-            mimic_defaults: options.value.mimicDefaults,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok || !response.body) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ detail: "Translation failed with non-JSON response" }));
-      throw new Error(errorData.detail || "Translation failed");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let done = false;
-    let buffer = "";
-    outputCode.value = "";
-    errors.value = [];
-
-    while (!done) {
-      const { value, done: streamDone } = await reader.read();
-      done = streamDone;
-      if (value) {
-        buffer += decoder.decode(value, { stream: true });
-        let lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const data = JSON.parse(line);
-            if (data.translated_code) {
-              outputCode.value += data.translated_code;
-            }
-            if (data.warnings && data.warnings.length > 0) {
-              errors.value = [
-                ...errors.value,
-                ...data.warnings.map((w: string) => `Warning: ${w}`),
-              ];
-            }
-            if (data.errors && data.errors.length > 0) {
-              errors.value = [
-                ...errors.value,
-                ...data.errors.map((e: string) => String(e)),
-              ];
-            }
-          } catch (e) {
-            // Ignore JSON parse errors for incomplete lines
-          }
-        }
-      }
-    }
-    // Handle any remaining buffered line
-    if (buffer.trim()) {
-      try {
-        const data = JSON.parse(buffer);
-        if (data.translated_code) {
-          outputCode.value += data.translated_code;
-        }
-        if (data.warnings && data.warnings.length > 0) {
-          errors.value = [
-            ...errors.value,
-            ...data.warnings.map((w: string) => `Warning: ${w}`),
-          ];
-        }
-        if (data.errors && data.errors.length > 0) {
-          errors.value = [
-            ...errors.value,
-            ...data.errors.map((e: string) => String(e)),
-          ];
-        }
-      } catch (e) {
-        // Ignore
-      }
-    }
-    // The watcher handles final highlighting based on outputCode.value
-    // No need for manual highlightedOutput.value assignment here.
-  } catch (e: any) {
-    console.error("Translation error:", e);
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    if (!errors.value.includes(errorMessage)) {
-      errors.value.push(errorMessage);
-    }
-    // outputCode.value is already empty or will be set by the watcher if cleared.
-    // If an error occurs, outputCode might have partial data or be empty.
-    // The watcher ensures highlightedOutput reflects the current state of outputCode.
-    // No need for: highlightedOutput.value = "";
-  } finally {
-    loading.value = false;
+  await apiTranslateCode({
+    sourceCode: sourceCode.value,
+    options: options.value,
+    runtimeConfig,
+    previousTranslation,
+    initialOutputCode,
+    setOutputCode: (val: string) => (outputCode.value = val),
+    setErrors: (val: string[]) => (errors.value = val)
+  });
+  loading.value = false;
+  if (options.value.autoCompile && errors.value.length === 0) {
+    await compileTranslatedCode();
   }
+};
+
+const translateCode = async () => {
+  upgradeCounter.value = 0;
+  return translateCodeInner("");
 };
 
 const copyTranslatedCode = () => {
@@ -729,6 +697,39 @@ const downloadTranslatedCode = () => {
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
   }
+};
+
+const compileTranslatedCode = async () => {
+  await apiCompileTranslatedCode({
+    outputCode: outputCode.value,
+    runtimeConfig,
+    onError: (val: string[]) => (errors.value = val),
+    onSuccess: () => { errors.value = []; },
+  });
+  compiled.value = true;
+  nextTick(() => {
+    if (outputContainer.value) {
+      outputContainer.value.scrollTop = outputContainer.value.scrollHeight;
+    }
+  });
+};
+
+const upgradeTranslatedCode = async () => {
+  upgradeCounter.value++;
+  let code = ""
+  if (upgradeCounter.value >= 3) {
+    code += "// Not all EVM features are supported on Alephium\n"
+    code += "// In some cases compiler error messages may not be sufficient to debug the issue\n"
+    code += "// If you encounter problems, see supported features on GitHub or try building locally\n"
+  }
+  return translateCodeInner(
+    code,
+    {
+      source_code: outputCode.value,
+      warnings: [],
+      errors: errors.value,
+    }
+  )
 };
 </script>
 

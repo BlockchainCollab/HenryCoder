@@ -379,7 +379,7 @@
                     :key="index"
                     class="font-mono text-xs"
                   >
-                    {{ typeof error === 'object' && (error as any).success ? (error as any).message : error }}
+                    {{ error }}
                   </li>
                 </ul>
               </div>
@@ -549,7 +549,7 @@ const options = ref({
   includeComments: true,
   mimicDefaults: false,
   // peripheral options
-  autoCompile: true,
+  autoCompile: false,
 });
 const copied = ref(false);
 const isScrolled = ref(false);

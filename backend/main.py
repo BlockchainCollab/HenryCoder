@@ -46,10 +46,7 @@ async def translate_code(request: TranslateRequest):
     all_warnings = []
     all_errors = []
     async for chunk, reasoning_chunk, warnings, errors in perform_translation(
-        source_code=source_code,
-        optimize=options.optimize,
-        include_comments=options.include_comments,
-        mimic_defaults=options.mimic_defaults,
+        request,
         stream=False  # Ensure streaming is off for this endpoint
     ):
         translated_code += chunk
@@ -74,7 +71,6 @@ async def translate_code_stream(request: TranslateRequest):
     Streams the translation of an EVM contract to Ralph.
     """
     source_code = request.source_code
-    options = request.options
 
     if not source_code.strip():
         raise HTTPException(status_code=400, detail="Please provide EVM code for translation.")
@@ -82,10 +78,7 @@ async def translate_code_stream(request: TranslateRequest):
     async def translation_generator():
         complete_code = ""
         async for chunk, reasoning, warnings, errors in perform_translation(
-            source_code=source_code,
-            optimize=options.optimize,
-            include_comments=options.include_comments,
-            mimic_defaults=options.mimic_defaults,
+            request,
             stream=True
         ):
             complete_code += chunk

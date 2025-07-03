@@ -7,6 +7,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || "/api",
+      nodeUrl: process.env.NUXT_PUBLIC_ALEPHIUM_NODE_URL || "https://node.testnet.alephium.org",
     },
   },
   app: {

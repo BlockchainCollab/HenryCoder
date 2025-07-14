@@ -12,12 +12,13 @@ Contract Roles(
   enum ErrorCodes {
     NotOwner = 1
     NotAdmin = 2
+    UnknownRole = 3
   }
 
   @using(updateFields = true)
-  pub fn changeOwner(newOwner: Address) -> () {
+  pub fn changeOwner_(newOwner_: Address) -> () {
     checkCaller!(externalCallerAddress!() == owner, ErrorCodes.NotOwner)
-    owner = newOwner
+    owner = newOwner_
   }
 
   pub fn getRole() -> U256 {
@@ -30,6 +31,7 @@ Contract Roles(
 
   pub fn setRole(user: Address, role: U256) -> () {
     checkCaller!(getRole() == Role.Admin, ErrorCodes.NotAdmin)
+    assert!(role == Role.Admin || role == Role.User || role == Role.Default, ErrorCodes.UnknownRole)
     if (roles.contains!(user)) {
       roles[user] = role
     } else {

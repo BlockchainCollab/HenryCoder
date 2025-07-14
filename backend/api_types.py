@@ -5,6 +5,7 @@ class TranslationOptions(BaseModel):
     optimize: bool
     include_comments: bool
     mimic_defaults: bool
+    smart: bool = False  # Whether to use the smart LLM model for translation
 
 class PreviousTranslation(BaseModel):
     source_code: str

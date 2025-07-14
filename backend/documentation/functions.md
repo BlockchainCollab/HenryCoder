@@ -98,6 +98,8 @@ fn foo() -> (U256, Boolean, ByteVec) {
 
 #### If-else statements/expressions
 
+ATTENTION: All "else if" blocks must end with an "else" block, otherwise the compiler will report an error.
+
 ```ralph
 fn foo() -> ByteVec {
   // If else statement

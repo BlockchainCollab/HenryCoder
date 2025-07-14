@@ -223,3 +223,14 @@ Contract Sender(
 }
 ```
 
+## Unary bit complement
+Ralph does not have a native unary bit complement operator `~`, but it can be easily implemented:
+
+```ralph
+Contract Foo() {
+  // Use unaryBitComplemenmt to implement unary bit complement for U256 type
+  fn unaryBitComplemenmt(value: U256) -> U256 {
+    return u256Max!() ^ value
+  }
+}
+```

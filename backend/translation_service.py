@@ -13,22 +13,24 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 API_URL = os.getenv("API_URL")
 LLM_MODEL = os.getenv("LLM_MODEL")
+SMART_LLM_MODEL = os.getenv("SMART_LLM_MODEL")
 TRANSLATIONS_DIR = os.path.join(os.path.dirname(__file__), "translations")
 DOCS_DIR = os.path.join(os.path.dirname(__file__), "documentation")
 DUMP_DIR = os.path.join(os.path.dirname(__file__), "dumps")
 MAX_DUMP_LENGTH = 100000
 
-if API_KEY is None or API_URL is None or LLM_MODEL is None:
+if API_KEY is None or API_URL is None or LLM_MODEL is None or SMART_LLM_MODEL is None:
     raise RuntimeError(
-        "API_KEY, API_URL, and LLM_MODEL must be set in the environment variables."
+        "API_KEY, API_URL, LLM_MODEL and SMART_LLM_MODEL must be set in the environment variables."
     )
 
 SYSTEM_PROMPT = (
-    "You are an expert EVM to Ralph translator."
-    "Translate the following EVM (Solidity) code to Ralph, adhering to the Ralph language specifications and best practices."
+    "You are an expert EVM to Ralph translator. "
+    "Translate the user provided EVM (Solidity) code to Ralph, adhering to the Ralph language specifications and best practices. "
+    "Ensure the translation is complete. "
     "Consider the following details about the Ralph language:"
     f"{RALPH_DETAILS}"
-    "\nHere are some examples of EVM to Ralph translations:"
+    "\nHere are some examples of EVM to Ralph translations:\n"
     f"{EXAMPLE_TRANSLATIONS}"
 )
 
@@ -48,13 +50,14 @@ async def perform_translation(
     mimic_defaults = translate_request.options.mimic_defaults
     source_code = translate_request.source_code
     previous = translate_request.previous_translation
+    model = SMART_LLM_MODEL if translate_request.options.smart else LLM_MODEL
 
     print(
         LOG_TEMPLATE.format(
             optimize=optimize,
             include_comments=include_comments,
             mimic_defaults=mimic_defaults,
-            llm_model=LLM_MODEL,
+            llm_model=model,
             api_url=API_URL,
         ),
         flush=True,
@@ -94,7 +97,7 @@ async def perform_translation(
         )
 
     common_parameters = {
-        "model": LLM_MODEL,
+        "model": model,
         "messages": messages,
         "max_tokens": 32000,
         "temperature": 0.0,

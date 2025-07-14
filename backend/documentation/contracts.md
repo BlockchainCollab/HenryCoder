@@ -10,31 +10,44 @@ Each Alephium's contract has 3 forms of unique identification:
 In Ralph, the contract ID is used more frequently. Contract ids can be converted from/to other forms with Ralph's built-in functions or web3 SDK.
 :::
 
-Contracts in Ralph are similar to classes in object-oriented languages. Each contract can contain declarations of contract fields, events, constants, enums, and functions. All these declarations must be inside a contract. Furthermore, contracts can inherit from other contracts.
+Contracts in Ralph are similar to classes in object-oriented languages. 
+Each contract can contain declarations of:
+0. contract fields
+1. maps (must be inside contract scope)
+2. events (must be inside contract or interface scope)
+3. consts
+4. enums
+5. methods (must be inside contract or interface scope)
+Furthermore, contracts can inherit from other contracts.
 
 ```ralph
 // This is a comment, and currently Ralph only supports line comments.
-// Contract should be named in upper camel case.
+// Contract should be named in UpperCamelCase.
 // Contract fields are permanently stored in the contract storage.
-Contract MyToken(supply: U256, name: ByteVec) {
+// Contract fields must be named in camelCase.
+Contract MyToken(supply: U256, name: ByteVec, mut owner: Address) {
 
-  // Events should be named in upper camel case.
+  // Events should be named in UpperCamelCase.
   // Events allow for logging of activities on the blockchain.
   // Applications can listen to these events through the REST API of an Alephium client.
   event Transfer(to: Address, amount: U256)
 
-  // Constant variables should be named in upper camel case.
-  const VERSION = 0
+  // Constant variables must be named in UpperCamelCase or SCREAMING_SNAKE_CASE.
+  const PROGRAM_VERSION = 0
 
   // Enums can be used to create a finite set of constant values.
   enum ErrorCodes {
-    // Enum constants should be named in upper camel case.
-    INVALID_CALLER = 0
+    // Enum constants must be named in UpperCamelCase or SCREAMING_SNAKE_CASE.
+    InvalidCaller = 0,
+    OwnerMustChange
   }
 
-  // Functions, parameters, and local variables should be named in lower camel case.
-  pub fn transferTo(toAddress: Address) -> () {
-    let payloadId = #00
+  // Functions, parameters, and local variables must be named in camelCase and must start with [a-z] (lowercase). They can end in `_` (underscore).
+  @using(updateFields = true)
+  pub fn changeOwner(owner_: Address) -> () {
+    let callerAddr = externalCallerAddress!()
+    checkCaller!(callerAddr == owner, ErrorCodes.InvalidCaller)
+    assert!(owner_ != owner, ErrorCodes.OwnerMustChange)
     // ...
   }
 }
@@ -385,6 +398,7 @@ struct Book {
   mut status: U256  // BookStatus
 }
 
+// First value of enum must be set explicitly
 enum ErrorCodes {
   BookNotFound = 0
   BookBorrowed
@@ -404,6 +418,7 @@ Contract BookShelf(
 
   const MAX_BOOKS = 20
 
+  // First value of enum must be set explicitly
   enum BookStatus {
     Available = 0
     Borrowed

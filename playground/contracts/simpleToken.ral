@@ -1,57 +1,3 @@
-The list of good practices for expert EVM to Ralph translators is as follows:
-
-### No commas in enum
-In Ralph, enum definitions must end with a line break. Commas will result in a compilation error.
-
-```ralph
-Contract Roles(
-  mut owner: Address
-) {
-  mapping[Address, U256] roles
-
-  // Enums in Ralph must always be defined without commas
-  enum Role {
-    NotDefined = 0
-    Admin = 1
-    User = 2
-  }
-
-  enum ErrorCodes {
-    NotOwner = 1
-    NotAdmin = 2
-  }
-
-  @using(updateFields = true)
-  pub fn changeOwner(newOwner: Address) -> () {
-    checkCaller!(externalCallerAddress!() == owner, ErrorCodes.NotOwner)
-    owner = newOwner
-  }
-
-  pub fn getRole() -> U256 {
-    // add below code if mimic solidity defaults is set to true:
-    // if (!roles.exists!(externalCallerAddress!())) {
-    //   return Role.Default
-    // }
-    return roles[externalCallerAddress!()]
-  }
-
-  pub fn setRole(user: Address, role: U256) -> () {
-    checkCaller!(getRole() == Role.Admin, ErrorCodes.NotAdmin)
-    if (roles.contains!(user)) {
-      roles[user] = role
-    } else {
-      roles.insert!(user, role)
-    }
-  }
-}
-```
-
-
-### No underscores at beginning of names
-Ralph doesn't support names that start with underscores.
-You can only use underscore `_` as a suffix.
-
-```ralph
 import "std/fungible_token_interface"
 
 Contract SimpleToken(
@@ -107,4 +53,3 @@ Contract SimpleToken(
     burn_{from -> selfTokenId!(): amount}(from, amount)
   }
 }
-```

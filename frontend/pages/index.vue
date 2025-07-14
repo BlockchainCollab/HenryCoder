@@ -314,6 +314,17 @@
                         >Auto-compile</Label
                       >
                     </div>
+                    <div class="flex items-center gap-3">
+                      <Checkbox
+                        id="smart"
+                        :model-value="options.smart"
+                        @update:model-value="(val) => (options.smart = Boolean(val))"
+                        class="custom-checkbox"
+                      />
+                      <Label for="smart" class="checkbox-label"
+                        >Smarter (thinking)</Label
+                      >
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
@@ -348,7 +359,7 @@
             <pre
               v-if="outputCode || loading"
               class="font-menlo text-sm whitespace-pre text-gray-300 w-max"
-            ><code class="hljs !bg-transparent language-rust" :class="{ 'opacity-50': loading }" v-html="highlightedOutput || (loading ? 'Translating...' : '')"></code></pre>
+            ><code class="hljs !bg-transparent language-rust" :class="{ 'opacity-50': loading }" v-html="highlightedOutput || (loading ? 'Translating...' + (!!loadingStatus ? ` (${loadingStatus})` : '') : '')"></code></pre>
             <div
               v-if="!outputCode && !loading && !errors.length"
               class="text-gray-500 text-[length:18px] font-menlo"
@@ -427,7 +438,7 @@
                 :disabled="loading"
                 class="w-full sm:w-[180px] bg-[#191817] border-2 border-[#FBA444] text-[#FBA444] hover:bg-[#FBA444] hover:text-black font-bold py-3 px-6 rounded-[10px] shadow-[0_0_6px_2px_rgba(239,133,16,0.70)] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-75 transition-all duration-300 ease-in-out"
               >
-                {{ "Upgrade" }}
+                {{ "Retranslate" }}
               </button>
               <button
                 @click="downloadTranslatedCode"
@@ -540,6 +551,7 @@ const sourceCode = ref("");
 const outputCode = ref(``);
 const highlightedOutput = ref("");
 const loading = ref(false);
+const loadingStatus = ref(0);
 const compiled = ref(false);
 const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
@@ -550,6 +562,7 @@ const options = ref({
   mimicDefaults: false,
   // peripheral options
   autoCompile: false,
+  smart: false, // not implemented yet
 });
 const copied = ref(false);
 const isScrolled = ref(false);
@@ -645,6 +658,7 @@ const closeConsent = () => {
 
 const translateCodeInner = async (initialOutputCode: string, previousTranslation?: PreviousTranslation) => {
   loading.value = true;
+  loadingStatus.value = 0;
   compiled.value = false;
   errors.value = [];
   await apiTranslateCode({
@@ -654,6 +668,7 @@ const translateCodeInner = async (initialOutputCode: string, previousTranslation
     previousTranslation,
     initialOutputCode,
     setOutputCode: (val: string) => (outputCode.value = val),
+    setLoadingStatus: (val: number) => (loadingStatus.value = val),
     setErrors: (val: string[]) => (errors.value = val)
   });
   loading.value = false;
@@ -717,7 +732,7 @@ const compileTranslatedCode = async () => {
 const upgradeTranslatedCode = async () => {
   upgradeCounter.value++;
   let code = ""
-  if (upgradeCounter.value >= 3) {
+  if (upgradeCounter.value == 3) {
     code += "// Not all EVM features are supported on Alephium\n"
     code += "// In some cases compiler error messages may not be sufficient to debug the issue\n"
     code += "// If you encounter problems, see supported features on GitHub or try building locally\n"

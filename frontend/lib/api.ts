@@ -11,6 +11,7 @@ export async function translateCode({
   initialOutputCode,
   previousTranslation,
   setOutputCode,
+  setLoadingStatus,
   setErrors,
 }: {
   sourceCode: string;
@@ -19,6 +20,7 @@ export async function translateCode({
   initialOutputCode: string;
   previousTranslation?: PreviousTranslation;
   setOutputCode: (val: string) => void;
+  setLoadingStatus: (val: number) => void;
   setErrors: (val: string[]) => void;
 }) {
   setOutputCode(initialOutputCode);
@@ -38,6 +40,7 @@ export async function translateCode({
             optimize: options.optimize,
             include_comments: options.includeComments,
             mimic_defaults: options.mimicDefaults,
+            smart: options.smart,
           },
           previous_translation: previousTranslation,
         }),
@@ -53,6 +56,7 @@ export async function translateCode({
     const decoder = new TextDecoder();
     let done = false;
     let buffer = "";
+    let thoughts_size = 0;
     setOutputCode("");
     setErrors([]);
     let errorsArr: string[] = [];
@@ -70,6 +74,10 @@ export async function translateCode({
             if (data.translated_code) {
               output += data.translated_code;
               setOutputCode(output);
+            }
+            if (data.reasoning_chunk) {
+              thoughts_size += data.reasoning_chunk.length;
+              setLoadingStatus(thoughts_size);
             }
             if (data.warnings && data.warnings.length > 0) {
               errorsArr = [
@@ -110,6 +118,14 @@ export async function translateCode({
         }
       } catch (e) {
         // Ignore
+      }
+    }
+    if (output.startsWith("```ralph")) {
+      // Remove the initial code block marker
+      output = output.replace(/^```ralph\s*\n/, "");
+      // Remove the final code block marker
+      if (output.endsWith("```")) {
+        output = output.slice(0, -3).trim();
       }
     }
     setOutputCode(output);

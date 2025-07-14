@@ -4,7 +4,6 @@ USER_PROMPT_TEMPLATE = (
     "Include comments: {include_comments}. "
     "Mimic Solidity defaults when loading from map key that does not exist: {mimic_defaults}."
     "\n--- EVM Code to Translate ---\n{source_code}\n--- End EVM Code ---"
-    "\n--- Translated Ralph Code ---"
 )
 
 LOG_TEMPLATE = (

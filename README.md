@@ -1,5 +1,8 @@
 # HenryCoder
 
+## Examples
+See example usages and further advice in the [examples](examples) directory.
+
 ## Tips
 - The whole contract suite should be provided as one file. Other dependencies will be translated with the main contract, however the translation quality is the highest with a single, self-contained contract.
 

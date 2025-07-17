@@ -1,7 +1,7 @@
 Alephium's unique stateful UTXO model completely reworks the way transfers and tokens work on-chain. On Alephium, tokens are a native concept so there is no need to use a contract to transact.
 
-## Transfers
-Transfers in Alephium are done by using any of the transfer functions. Note that ALPH is also a native token, and can be transacted in exactly the same manner.
+## Native Alephium Transfers
+Transfers in Alephium are done by using any of the transfer functions. Note that ALPH is also a native token, and can be transacted in exactly the same manner. These transfers replace `ERC20` and `IERC20` standards. In Ralph there are no standard ERC20 tokens, and all transfers HAVE TO be done natively.
 
 ```ralph
 Contract EscrowExample(
@@ -25,8 +25,8 @@ Contract EscrowExample(
 }
 ```
 
-## Approvals
-Approvals in Alephium are managed on a per-transaction basis. So if you want to pass approved assets to another contract you have to use the curly braces syntax.
+## Native Alephium Approvals
+Approvals in Alephium are managed on a per-transaction basis. So if you want to pass approved assets to another contract you have to use the curly braces syntax. This replaces the need for `approve` and `transferFrom` functions in ERC20 tokens.
 
 ```ralph
 Interface DexExample {

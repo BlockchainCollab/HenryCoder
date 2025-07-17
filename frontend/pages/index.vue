@@ -302,6 +302,17 @@
                         >Mimic Solidity Defaults</Label
                       >
                     </div>
+                    <div class="flex items-center gap-3">
+                      <Checkbox
+                        id="translateERC20"
+                        :model-value="options.translateERC20"
+                        @update:model-value="(val) => (options.translateERC20 = Boolean(val))"
+                        class="custom-checkbox"
+                      />
+                      <Label for="translateERC20" class="checkbox-label"
+                        >Translate ERC20 transfers</Label
+                      >
+                    </div>
                     <hr class="my-0 border-t border-[#4C4B4B] opacity-60" />
                     <div class="flex items-center gap-3">
                       <Checkbox
@@ -456,11 +467,10 @@
       <h2
         class="text-[length:28px] xs:text-[length:36px] font-medium text-white mb-5 text-center"
       >
-        Looking for more innovative blockchain products?
+        Looking to build innovative blockchain products?
       </h2>
       <p class="text-white text-[length:16px] mb-[36px] text-center">
-        Browse our expanded ecosystem of blockchain and AI-driven products for
-        power users and developers.
+        Discover our cutting-edge suite of web3 and AI solutions designed for developers and blockchain innovators.
       </p>
       <a
         href="https://blockchain-collab.com/"
@@ -560,6 +570,7 @@ const options = ref({
   optimize: false,
   includeComments: true,
   mimicDefaults: false,
+  translateERC20: false, // new option for ERC20 translation
   // peripheral options
   autoCompile: false,
   smart: false, // not implemented yet

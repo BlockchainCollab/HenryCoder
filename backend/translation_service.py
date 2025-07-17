@@ -6,7 +6,7 @@ import openai
 from dotenv import load_dotenv
 from api_types import TranslateRequest
 from translation_context import RALPH_DETAILS, EXAMPLE_TRANSLATIONS
-from templates import USER_PROMPT_TEMPLATE, LOG_TEMPLATE
+from templates import UPGRADE_TEMPLATE, LOG_TEMPLATE, get_user_prompt
 
 load_dotenv()
 
@@ -48,6 +48,7 @@ async def perform_translation(
     optimize = translate_request.options.optimize
     include_comments = translate_request.options.include_comments
     mimic_defaults = translate_request.options.mimic_defaults
+    translate_erc20 = translate_request.options.translate_erc20
     source_code = translate_request.source_code
     previous = translate_request.previous_translation
     model = SMART_LLM_MODEL if translate_request.options.smart else LLM_MODEL
@@ -57,16 +58,18 @@ async def perform_translation(
             optimize=optimize,
             include_comments=include_comments,
             mimic_defaults=mimic_defaults,
+            translate_erc20=translate_erc20,
             llm_model=model,
             api_url=API_URL,
         ),
         flush=True,
     )
 
-    user_prompt = USER_PROMPT_TEMPLATE.format(
+    user_prompt = get_user_prompt(
         optimize=optimize,
         include_comments=include_comments,
         mimic_defaults=mimic_defaults,
+        translate_erc20=translate_erc20,
         source_code=source_code,
     )
 
@@ -89,10 +92,7 @@ async def perform_translation(
         messages.append(
             {
                 "role": "user",
-                "content": (
-                    f"The code produced the following erors: {"\n\n".join(previous.errors)}\n\n"
-                    "Fix the translation. Only return the corrected code without any additional text."
-                )
+                "content": UPGRADE_TEMPLATE.format(previous_errors="\n\n".join(previous.errors))
             }
         )
 

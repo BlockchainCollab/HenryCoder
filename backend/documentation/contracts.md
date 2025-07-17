@@ -222,7 +222,7 @@ fn upgrade(newCode: ByteVec) -> () {
 
 ## Inheritance
 
-Ralph also supports multiple inheritance, when a contract inherits from other contracts, only a single contract is created on the blockchain, and the code from all the parent contracts is compiled into the created contract.
+Ralph also supports multiple inheritance, when a contract inherits from other contracts, only a single contract is created on the blockchain, and the code from all the parent contracts is compiled into the created contract. `Contract` can ONLY "extend" `Abstract Contract`.
 
 ```ralph
 Abstract Contract Foo(a: U256) {

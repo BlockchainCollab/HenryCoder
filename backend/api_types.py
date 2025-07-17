@@ -5,6 +5,7 @@ class TranslationOptions(BaseModel):
     optimize: bool
     include_comments: bool
     mimic_defaults: bool
+    translate_erc20: bool = False  # Whether to translate ERC20 to Alephium native
     smart: bool = False  # Whether to use the smart LLM model for translation
 
 class PreviousTranslation(BaseModel):

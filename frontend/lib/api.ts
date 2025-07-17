@@ -41,6 +41,7 @@ export async function translateCode({
             include_comments: options.includeComments,
             mimic_defaults: options.mimicDefaults,
             smart: options.smart,
+            translate_erc20: options.translateERC20,
           },
           previous_translation: previousTranslation,
         }),

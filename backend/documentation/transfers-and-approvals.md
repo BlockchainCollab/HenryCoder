@@ -3,6 +3,9 @@ Alephium's unique stateful UTXO model completely reworks the way transfers and t
 ## Native Alephium Transfers
 Transfers in Alephium are done by using any of the transfer functions. Note that ALPH is also a native token, and can be transacted in exactly the same manner. These transfers replace `ERC20` and `IERC20` standards. In Ralph there are no standard ERC20 tokens, and all transfers HAVE TO be done natively.
 
+Use `payToContractOnly` if the function only receives tokens/ALPH.
+Use `assetsInContract` if the function sends tokens/ALPH.
+
 ```ralph
 Contract EscrowExample(
   tokenId: ByteVec,

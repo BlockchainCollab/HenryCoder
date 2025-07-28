@@ -1,5 +1,6 @@
 USER_PROMPT_TEMPLATE = (
-    'Now, translate the following EVM code. There is no limit to how long the output can be. IMPORTANT: Only provide the resulting Ralph code WITHOUT "```ralph" markdown or any other information. '
+    "--- EVM Code to Translate ---\n{source_code}\n--- End EVM Code ---\n\n"
+    'Now, translate the above EVM code. There is no limit to how long the output can be. IMPORTANT: Only provide the resulting Ralph code WITHOUT "```ralph" markdown or any other information. '
     "Optimize: {optimize}. "
     "Include comments: {include_comments}. "
     "Mimic Solidity defaults when loading from map key that does not exist: {mimic_defaults}. "
@@ -8,10 +9,9 @@ USER_PROMPT_TEMPLATE = (
     "- Using commas \",\" in enums.\n"
     "- Defining state variables inside contract body.\n"
     "- Using an underscore \"_\" in front of a function name.\n"
-    "\n--- EVM Code to Translate ---\n{source_code}\n--- End EVM Code ---"
 )
 
-ERC20_NOTICE = "Translate ERC20 transfers and approvals to native Alephium tokens.  Comment out other calls to IERC20 methods and notice that they are unsupported."
+ERC20_NOTICE = "Translate ERC20 transfers and approvals to native Alephium tokens. Translate token addresses to `ByteVec`.  Comment out other calls to IERC20 methods and notice that they are unsupported."
 
 def get_user_prompt(
     optimize: bool,

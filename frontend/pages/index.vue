@@ -378,12 +378,12 @@
               Translation will appear here ✨
             </div>
             <!-- Success Display Section -->
-            <section v-if="errors.length === 0 && compiled && !loading" class="mt-2 p-1">
+            <section v-if="successMessage && !loading" class="mt-2 p-1">
               <div
                 class="text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
               >
                 <ul>
-                  <li class="font-mono text-xs">Compilation successful!</li>
+                  <li class="font-mono text-xs">{{ successMessage }}</li>
                 </ul>
               </div>
             </section>
@@ -565,6 +565,7 @@ const loadingStatus = ref(0);
 const compiled = ref(false);
 const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
+const successMessage = ref<string | null>(null);
 const options = ref({
   // translation options
   optimize: false,
@@ -672,6 +673,7 @@ const translateCodeInner = async (initialOutputCode: string, previousTranslation
   loadingStatus.value = 0;
   compiled.value = false;
   errors.value = [];
+  successMessage.value = null;
   await apiTranslateCode({
     sourceCode: sourceCode.value,
     options: options.value,
@@ -726,11 +728,15 @@ const downloadTranslatedCode = () => {
 };
 
 const compileTranslatedCode = async () => {
+  successMessage.value = null;
   await apiCompileTranslatedCode({
     outputCode: outputCode.value,
     runtimeConfig,
     onError: (val: string[]) => (errors.value = val),
-    onSuccess: () => { errors.value = []; },
+    onSuccess: (message?: string) => {
+      errors.value = [];
+      successMessage.value = message || "Compilation successful!";
+    },
   });
   compiled.value = true;
   nextTick(() => {

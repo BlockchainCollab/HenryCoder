@@ -142,12 +142,12 @@ export async function compileTranslatedCode({
   outputCode,
   runtimeConfig,
   onError,
-  onSuccess
+  onSuccess,
 }: {
   outputCode: string;
   runtimeConfig: any;
   onError: (val: string[]) => void;
-  onSuccess: () => void;
+  onSuccess: (message?: string) => void;
 }) {
   let node_endpoint = "/contracts/compile-contract";
   let url = `${runtimeConfig.public.nodeUrl}${node_endpoint}`;
@@ -178,6 +178,15 @@ export async function compileTranslatedCode({
           }
         } catch (e) {
           errorMsg = response.statusText || errorMsg;
+        }
+
+        if (
+          errorMsg.includes("Code generation is not supported for abstract contract")
+        ) {
+          onSuccess(
+            "No syntax errors, but code generation is not supported for abstract contracts - please try locally"
+          );
+          return;
         }
         onError([errorMsg]);
         return;

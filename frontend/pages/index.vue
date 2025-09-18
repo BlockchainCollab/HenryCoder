@@ -473,7 +473,7 @@
         Discover our cutting-edge suite of web3 and AI solutions designed for developers and blockchain innovators.
       </p>
       <a
-        href="https://blockchain-collab.com/"
+        href="https://blockchain-collab.com/alephium"
         target="_blank"
         rel="noopener noreferrer"
         :class="[

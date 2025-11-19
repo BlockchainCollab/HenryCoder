@@ -101,3 +101,72 @@ async def health_check():
     """
     return {"status": "ok", "version": "0.1.0"}
 
+# Chat endpoints
+from agent_service import get_agent
+from api_types import ChatRequest, ChatResponse
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Streams chat responses with stage updates from the LangChain agent.
+    """
+    agent = get_agent()
+    
+    async def chat_generator():
+        try:
+            async for event in agent.chat(
+                message=request.message,
+                session_id=request.session_id or "default",
+                stream=True
+            ):
+                # Send event as JSON line
+                yield json.dumps(event) + "\n"
+        except Exception as e:
+            logger.error(f"Chat streaming error: {e}", exc_info=True)
+            error_event = {
+                "type": "error",
+                "data": {"message": str(e)}
+            }
+            yield json.dumps(error_event) + "\n"
+    
+    return StreamingResponse(chat_generator(), media_type="application/x-ndjson")
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    Non-streaming chat endpoint.
+    """
+    agent = get_agent()
+    
+    response_text = ""
+    try:
+        async for event in agent.chat(
+            message=request.message,
+            session_id=request.session_id or "default",
+            stream=False
+        ):
+            if event.get("type") == "content":
+                response_text += event.get("data", "")
+    except Exception as e:
+        logger.error(f"Chat error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    return ChatResponse(
+        message=response_text,
+        session_id=request.session_id or "default",
+        timestamp=datetime.utcnow().isoformat()
+    )
+
+@app.delete("/api/chat/session/{session_id}")
+async def clear_chat_session(session_id: str):
+    """
+    Clears chat history for a session.
+    """
+    agent = get_agent()
+    agent.clear_session(session_id)
+    return {"status": "ok", "message": f"Session {session_id} cleared"}
+

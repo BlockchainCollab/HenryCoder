@@ -18,8 +18,7 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import Tool
 from langchain.memory import ConversationBufferMemory
 from langchain.callbacks.base import BaseCallbackHandler
-from translation_context import RALPH_DETAILS, EXAMPLE_TRANSLATIONS
-from translation_service import perform_translation
+from translation_service import perform_translation, SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT
 from api_types import TranslateRequest, TranslationOptions
 import os
 from dotenv import load_dotenv
@@ -28,7 +27,16 @@ import asyncio
 
 load_dotenv()
 
+# Configure logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# Create console handler if not already present
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
 API_KEY = os.getenv("API_KEY")
 API_URL = os.getenv("API_URL")
@@ -40,6 +48,7 @@ AgentStage = Literal[
     "thinking",          # Agent is analyzing the request
     "using_tool",        # Agent decided to use a tool
     "reading_code",      # Reading/parsing provided code
+    "preprocessing",     # Resolving imports
     "translating",       # Translating code (tool)
     "generating",        # Generating new code
     "fetching_docs",     # Fetching documentation
@@ -66,6 +75,7 @@ class StreamEvent:
             "thinking": "🤔 Analyzing your request...",
             "using_tool": "🔧 Preparing tools...",
             "reading_code": "📖 Reading your code...",
+            "preprocessing": "📦 Resolving imports...",
             "translating": "🔄 Translating to Ralph...",
             "generating": "✨ Generating code...",
             "fetching_docs": "📚 Fetching documentation...",
@@ -121,10 +131,12 @@ class StreamingCallbackHandler(BaseCallbackHandler):
         super().__init__()
         self.event_queue = event_queue
         self.current_tool = None
+        logger.info("StreamingCallbackHandler initialized")
     
     def on_llm_start(self, *args, **kwargs):
         """Called when LLM starts generating."""
         try:
+            logger.info("on_llm_start called")
             self.event_queue.put_nowait(StreamEvent.stage("thinking"))
         except Exception as e:
             logger.error(f"Error in on_llm_start: {e}")
@@ -132,11 +144,13 @@ class StreamingCallbackHandler(BaseCallbackHandler):
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs):
         """Called when a tool starts executing."""
         try:
+            logger.info(f"on_tool_start called with serialized: {serialized}")
             tool_name = serialized.get("name", "unknown")
             self.current_tool = tool_name
             
             # Map tool to stage
             stage_map = {
+                "resolve_solidity_imports": "preprocessing",
                 "translate_evm_to_ralph": "translating",
                 "get_ralph_documentation": "fetching_docs",
                 "generate_ralph_template": "generating"
@@ -147,29 +161,52 @@ class StreamingCallbackHandler(BaseCallbackHandler):
             self.event_queue.put_nowait(StreamEvent.tool_start(tool_name, input_str))
             logger.info(f"Tool started: {tool_name}")
         except Exception as e:
-            logger.error(f"Error in on_tool_start: {e}")
+            logger.error(f"Error in on_tool_start: {e}", exc_info=True)
     
     def on_tool_end(self, output: str, **kwargs):
         """Called when a tool finishes executing."""
         try:
+            logger.info(f"on_tool_end called for tool: {self.current_tool}")
             if self.current_tool:
                 logger.info(f"Tool completed: {self.current_tool}")
                 self.event_queue.put_nowait(StreamEvent.tool_end(self.current_tool))
                 self.current_tool = None
             self.event_queue.put_nowait(StreamEvent.stage("completing"))
         except Exception as e:
-            logger.error(f"Error in on_tool_end: {e}")
+            logger.error(f"Error in on_tool_end: {e}", exc_info=True)
     
     def on_tool_error(self, error: Exception, **kwargs):
         """Called when a tool encounters an error."""
         try:
+            logger.error(f"on_tool_error called: {error}")
             if self.current_tool:
                 logger.error(f"Tool error: {self.current_tool} - {error}")
                 self.event_queue.put_nowait(StreamEvent.tool_end(self.current_tool, success=False))
                 self.event_queue.put_nowait(StreamEvent.error(str(error)))
                 self.current_tool = None
         except Exception as e:
-            logger.error(f"Error in on_tool_error: {e}")
+            logger.error(f"Error in on_tool_error: {e}", exc_info=True)
+    
+    def on_agent_action(self, action, **kwargs):
+        """Called when agent decides to take an action."""
+        try:
+            logger.info(f"on_agent_action called: tool={action.tool}, input={str(action.tool_input)[:100]}...")
+        except Exception as e:
+            logger.error(f"Error in on_agent_action: {e}", exc_info=True)
+    
+    def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs):
+        """Called when a chain starts."""
+        try:
+            logger.info(f"on_chain_start called: {serialized.get('name', 'unknown')}")
+        except Exception as e:
+            logger.error(f"Error in on_chain_start: {e}")
+    
+    def on_chain_end(self, outputs: Dict[str, Any], **kwargs):
+        """Called when a chain ends."""
+        try:
+            logger.info(f"on_chain_end called with outputs keys: {list(outputs.keys())}")
+        except Exception as e:
+            logger.error(f"Error in on_chain_end: {e}")
 
 
 class ChatAgent:
@@ -206,10 +243,87 @@ class ChatAgent:
     def _create_tools(self) -> List[Tool]:
         """Create tools the agent can use."""
         
+        def resolve_imports_tool(code: str) -> str:
+            """
+            Resolves Solidity import statements by replacing them with actual contract code.
+            CRITICAL: ALWAYS use this tool FIRST if the code contains 'import' statements.
+            Supports OpenZeppelin imports like '@openzeppelin/contracts/token/ERC20/ERC20.sol'.
+            Returns the code with all imports replaced by their actual implementation.
+            """
+            try:
+                logger.info(f"Resolving imports for code of length: {len(code)}")
+                
+                # Check if code has imports
+                if "import" not in code:
+                    logger.info("No imports detected in code")
+                    return "✓ No imports detected. Code is ready for translation."
+                
+                # Import the preprocessing function
+                from translate_oz import replace_imports
+                import re
+                
+                # Extract import statements
+                import_pattern = r'import\s+["\']([^"\']+)["\'];?'
+                imports = re.findall(import_pattern, code)
+                
+                if not imports:
+                    logger.info("No import statements found in code")
+                    return "✓ No import statements found. Code is ready for translation."
+                
+                logger.info(f"Found {len(imports)} import(s): {imports}")
+                
+                # Replace imports with their implementations
+                replacement_text = replace_imports(imports)
+                
+                # Remove import statements and prepend replacements
+                code_without_imports = re.sub(import_pattern, '', code)
+                preprocessed_code = f"{replacement_text}\n\n{code_without_imports}"
+                
+                logger.info(f"Imports resolved. New code length: {len(preprocessed_code)}")
+                
+                return f"""✓ Imports successfully resolved!
+
+Found and resolved {len(imports)} import(s):
+{chr(10).join(f'  - {imp}' for imp in imports)}
+
+Preprocessed code (ready for translation):
+```solidity
+{preprocessed_code}
+```
+
+NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
+                
+            except Exception as e:
+                logger.error(f"Import resolution error: {e}", exc_info=True)
+                return f"❌ Error resolving imports: {str(e)}\n\nThe code can still be translated, but imports won't be resolved."
+        
         async def translate_code_tool(code: str) -> str:
-            """Translates EVM/Solidity code to Ralph language. This may take 1-2 minutes for complex contracts."""
+            """
+            Translates EVM/Solidity code to Ralph language for Alephium blockchain.
+            
+            IMPORTANT: If the code contains 'import' statements, you should use resolve_solidity_imports FIRST,
+            then use this tool with the preprocessed code.
+            
+            This tool may take 1-2 minutes for complex contracts.
+            """
             try:
                 logger.info(f"Starting translation for code of length: {len(code)}")
+                
+                # Safety fallback: check if imports are still present
+                if "import" in code and ("@openzeppelin" in code.lower() or ".sol" in code):
+                    logger.warning("⚠️ Code contains imports but wasn't preprocessed! Preprocessing now as fallback...")
+                    from translate_oz import replace_imports
+                    import re
+                    
+                    import_pattern = r'import\s+["\']([^"\']+)["\'];?'
+                    imports = re.findall(import_pattern, code)
+                    
+                    if imports:
+                        logger.info(f"Fallback preprocessing: Found {len(imports)} import(s)")
+                        replacement_text = replace_imports(imports)
+                        code = re.sub(import_pattern, '', code)
+                        code = f"{replacement_text}\n\n{code}"
+                        logger.info("Fallback preprocessing completed")
                 
                 # Use smart mode for faster, better translations
                 request = TranslateRequest(
@@ -230,12 +344,13 @@ class ChatAgent:
                 logger.info(f"Translation completed. Output length: {len(translated)}")
                 return f"Translated Ralph code:\n```ralph\n{translated}\n```"
             except Exception as e:
-                logger.error(f"Translation tool error: {e}")
+                logger.error(f"Translation tool error: {e}", exc_info=True)
                 return f"Error translating code: {str(e)}"
         
         def get_ralph_docs() -> str:
             """Returns Ralph language documentation and examples."""
-            return f"Ralph Language Documentation:\n\n{RALPH_DETAILS[:3000]}\n\nExample Translations:\n\n{EXAMPLE_TRANSLATIONS[:2000]}"
+            # Return the full translation system prompt which contains all Ralph documentation
+            return TRANSLATION_SYSTEM_PROMPT
         
         def generate_ralph_template(contract_type: str) -> str:
             """Generates a Ralph contract template based on type (token, nft, marketplace, etc.)."""
@@ -336,8 +451,30 @@ class ChatAgent:
         
         return [
             Tool(
+                name="resolve_solidity_imports",
+                description="""CRITICAL: ALWAYS use this tool FIRST if Solidity code contains 'import' statements!
+                
+Resolves Solidity imports (especially OpenZeppelin like '@openzeppelin/contracts/...') by replacing them with actual contract code.
+
+When to use:
+- Code contains 'import' keyword
+- Code has '@openzeppelin' imports
+- Code references external .sol files
+- ALWAYS before calling translate_evm_to_ralph if imports are present
+
+Returns: Preprocessed code with imports resolved, ready for translation.""",
+                func=resolve_imports_tool
+            ),
+            Tool(
                 name="translate_evm_to_ralph",
-                description="Translates EVM/Solidity smart contract code to Ralph language for Alephium blockchain. Use when user provides Solidity/EVM code.",
+                description="""Translates EVM/Solidity smart contract code to Ralph language for Alephium blockchain.
+
+IMPORTANT WORKFLOW:
+1. If code has imports → FIRST use resolve_solidity_imports
+2. Then use this tool with the preprocessed code
+
+Use when: User provides Solidity/EVM code to translate.
+Note: Takes 1-2 minutes for complex contracts.""",
                 func=translate_code_tool,
                 coroutine=translate_code_tool
             ),
@@ -354,33 +491,53 @@ class ChatAgent:
         ]
     
     def _create_prompt(self) -> ChatPromptTemplate:
-        """Create the agent prompt template."""
+        """Create the agent prompt template using the translation system prompt."""
+        # Use the same Ralph documentation that the translation service uses
+        # Escape curly braces in the translation prompt to avoid template variable conflicts
+        escaped_translation_prompt = TRANSLATION_SYSTEM_PROMPT.replace("{", "{{").replace("}", "}}")
+        
+        # Build the system message by concatenating parts
+        system_message_parts = [
+            "You are HenryBot, an expert AI assistant for Alephium blockchain development and Ralph smart contract programming.\n\n",
+            escaped_translation_prompt,
+            "\n\nYour capabilities:\n",
+            "- Translate EVM/Solidity code to Ralph language\n",
+            "- Resolve Solidity import statements (OpenZeppelin, etc.)\n",
+            "- Answer questions about Ralph syntax and best practices\n",
+            "- Generate Ralph contract templates\n",
+            "- Debug and improve Ralph code\n",
+            "- Explain Alephium blockchain concepts\n\n",
+            
+            "CRITICAL WORKFLOW FOR CODE WITH IMPORTS:\n",
+            "1. Check if the code contains 'import' statements\n",
+            "2. If YES → ALWAYS use resolve_solidity_imports tool FIRST\n",
+            "3. Then use translate_evm_to_ralph with the preprocessed code from step 2\n",
+            "4. If NO imports → directly use translate_evm_to_ralph\n\n",
+            
+            "Example:\n",
+            "User provides: import '@openzeppelin/contracts/token/ERC20/ERC20.sol'; contract Token is ERC20 {{}}\n",
+            "Step 1: Use resolve_solidity_imports → Get preprocessed code\n",
+            "Step 2: Use translate_evm_to_ralph with preprocessed code → Get Ralph translation\n",
+            "NEVER skip resolve_solidity_imports if imports are present!\n\n",
+            
+            "Guidelines:\n",
+            "- When using a tool that returns code (translate_evm_to_ralph, generate_ralph_template), ALWAYS include the full tool output in your response\n",
+            "- The tool output already contains the code - you should explain it briefly but MUST include the complete tool result\n",
+            "- Follow Ralph best practices (naming conventions, annotations, error handling)\n",
+            "- Be concise but thorough\n",
+            "- The user needs to see the actual code, not just a summary\n\n",
+            
+            "IMPORTANT: When a tool returns translated code or a template, your response should be:\n",
+            "1. Brief intro (1 sentence)\n",
+            "2. The COMPLETE tool output (including all code)\n",
+            "3. Brief explanation of key points (2-3 sentences)\n\n",
+            
+            "Current conversation:"
+        ]
+        system_message = "".join(system_message_parts)
+
         return ChatPromptTemplate.from_messages([
-            ("system", """You are HenryBot, an expert AI assistant for Alephium blockchain development and Ralph smart contract programming.
-
-Your capabilities:
-- Translate EVM/Solidity code to Ralph language
-- Answer questions about Ralph syntax and best practices
-- Generate Ralph contract templates
-- Debug and improve Ralph code
-- Explain Alephium blockchain concepts
-
-Ralph Language Context:
-{ralph_context}
-
-Guidelines:
-- When using a tool that returns code (translate_evm_to_ralph, generate_ralph_template), ALWAYS include the full tool output in your response
-- The tool output already contains the code - you should explain it briefly but MUST include the complete tool result
-- Follow Ralph best practices (naming conventions, annotations, error handling)
-- Be concise but thorough
-- The user needs to see the actual code, not just a summary
-
-IMPORTANT: When a tool returns translated code or a template, your response should be:
-1. Brief intro (1 sentence)
-2. The COMPLETE tool output (including all code)
-3. Brief explanation of key points (2-3 sentences)
-
-Current conversation:"""),
+            ("system", system_message),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -428,6 +585,9 @@ Current conversation:"""),
             event_queue = asyncio.Queue()
             callback_handler = StreamingCallbackHandler(event_queue)
             
+            logger.info(f"Created callback handler: {callback_handler}")
+            logger.info(f"Available callback methods: {[m for m in dir(callback_handler) if m.startswith('on_')]}")
+            
             # Create agent executor
             agent_executor = AgentExecutor(
                 agent=self.agent,
@@ -440,33 +600,61 @@ Current conversation:"""),
                 return_intermediate_steps=True  # Include tool outputs in the stream
             )
             
-            # Prepare inputs
+            logger.info(f"Agent executor created with {len(agent_executor.callbacks)} callbacks")
+            
+            # Prepare inputs - Ralph context is now in the system prompt
             inputs = {
-                "input": message,
-                "ralph_context": f"{RALPH_DETAILS[:2000]}..."
+                "input": message
             }
             
             if stream:
                 # Create tasks for agent execution and event processing
                 async def process_agent():
                     try:
+                        logger.info("Starting agent stream...")
                         async for chunk in agent_executor.astream(inputs):
+                            logger.info(f"Received chunk with keys: {list(chunk.keys())}")
+                            
                             # Handle different chunk types
-                            if "output" in chunk:
-                                # Final agent response
-                                await event_queue.put(StreamEvent.content(chunk["output"]))
+                            if "actions" in chunk:
+                                # This comes BEFORE tool execution
+                                logger.info(f"Actions chunk with {len(chunk['actions'])} actions")
+                                for action in chunk["actions"]:
+                                    tool_name = action.tool
+                                    logger.info(f"Agent taking action: {tool_name}")
+                                    
+                                    # Manually emit tool_start event since callbacks might not fire in astream
+                                    stage_map = {
+                                        "resolve_solidity_imports": "preprocessing",
+                                        "translate_evm_to_ralph": "translating",
+                                        "get_ralph_documentation": "fetching_docs",
+                                        "generate_ralph_template": "generating"
+                                    }
+                                    stage = stage_map.get(tool_name, "using_tool")
+                                    await event_queue.put(StreamEvent.stage(stage))
+                                    await event_queue.put(StreamEvent.tool_start(tool_name, str(action.tool_input)[:100]))
+                                    
                             elif "steps" in chunk:
-                                # Intermediate tool outputs
+                                # This comes AFTER tool execution
+                                logger.info(f"Steps chunk with {len(chunk['steps'])} steps")
                                 for step in chunk["steps"]:
+                                    if hasattr(step, 'action'):
+                                        tool_name = step.action.tool
+                                        logger.info(f"Step completed for tool: {tool_name}")
+                                        # Manually emit tool_end event
+                                        await event_queue.put(StreamEvent.tool_end(tool_name))
+                                    
                                     if hasattr(step, "observation") and step.observation:
                                         # Send tool output as content
                                         logger.info(f"Sending tool observation to frontend: {len(step.observation)} chars")
                                         await event_queue.put(StreamEvent.content(step.observation + "\n\n"))
-                            elif "actions" in chunk:
-                                # Log actions being taken
-                                for action in chunk["actions"]:
-                                    logger.info(f"Agent taking action: {action.tool}")
+                                        
+                            elif "output" in chunk:
+                                # Final agent response
+                                logger.info(f"Final output chunk: {len(chunk['output'])} chars")
+                                await event_queue.put(StreamEvent.content(chunk["output"]))
                         
+                        logger.info("Agent stream completed")
                         # Signal completion
                         await event_queue.put(StreamEvent.stage("done"))
                         await event_queue.put(None)  # Sentinel to stop queue processing

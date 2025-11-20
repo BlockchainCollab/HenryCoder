@@ -12,6 +12,7 @@ export type AgentStage =
   | 'thinking'
   | 'using_tool'
   | 'reading_code'
+  | 'preprocessing'
   | 'translating'
   | 'generating'
   | 'fetching_docs'

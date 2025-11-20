@@ -6,6 +6,7 @@ import openai
 from dotenv import load_dotenv
 from api_types import TranslateRequest
 from translation_context import RALPH_DETAILS, EXAMPLE_TRANSLATIONS
+from translate_oz import replace_imports
 from templates import UPGRADE_TEMPLATE, LOG_TEMPLATE, get_user_prompt
 
 load_dotenv()
@@ -33,6 +34,15 @@ SYSTEM_PROMPT = (
     "\nHere are some examples of EVM to Ralph translations:\n"
     f"{EXAMPLE_TRANSLATIONS}"
 )
+
+def preprocess_source_code(source_code: str) -> str:
+    """
+    Preprocesses the source code before translation.
+    Currently a placeholder for any future preprocessing steps.
+    """
+
+
+    return source_code
 
 
 async def perform_translation(

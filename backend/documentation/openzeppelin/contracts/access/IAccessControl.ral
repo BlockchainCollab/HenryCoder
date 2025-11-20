@@ -1,0 +1,17 @@
+Interface IAccessControl {
+  event RoleAdminChanged(role: ByteVec, previousAdminRole: ByteVec, newAdminRole: ByteVec)
+  event RoleGranted(role: ByteVec, account: Address, sender: Address)
+  event RoleRevoked(role: ByteVec, account: Address, sender: Address)
+
+  pub fn hasRole(role: ByteVec, account: Address) -> Bool
+  pub fn getRoleAdmin(role: ByteVec) -> ByteVec
+
+  @using(updateFields = true)
+  pub fn grantRole(role: ByteVec, account: Address) -> ()
+
+  @using(updateFields = true)
+  pub fn revokeRole(role: ByteVec, account: Address) -> ()
+
+  @using(updateFields = true)
+  pub fn renounceRole(role: ByteVec, callerConfirmation: Address) -> ()
+}

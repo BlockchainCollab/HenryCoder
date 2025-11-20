@@ -5,10 +5,10 @@ USER_PROMPT_TEMPLATE = (
     "Include comments: {include_comments}. "
     "Mimic Solidity defaults when loading from map key that does not exist: {mimic_defaults}. "
     "{translate_erc20}\n"
-    "Solidity to Ralph translators often make the following errors:\n"
-    "- Using commas \",\" in enums.\n"
-    "- Defining state variables inside contract body.\n"
-    "- Using an underscore \"_\" in front of a function name.\n"
+    "You follow these special instructions exactly:\n"
+    "- MUST NOT use commas \",\" in enums.\n"
+    "- MUST NOT define state variables inside contract body.\n"
+    "- MUST NOT use an underscore \"_\" in front of a function name.\n"
 )
 
 ERC20_NOTICE = "Translate ERC20 transfers and approvals to native Alephium tokens. Translate token addresses to `ByteVec`.  Comment out other calls to IERC20 methods and notice that they are unsupported."

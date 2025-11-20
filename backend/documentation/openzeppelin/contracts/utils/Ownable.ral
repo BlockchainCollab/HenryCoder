@@ -1,0 +1,37 @@
+Abstract Contract Ownable(mut owner: Address) {
+  event OwnershipTransferred(previousOwner: Address, newOwner: Address)
+
+  const OwnableUnauthorizedAccount = 1
+  const OwnableInvalidOwner = 2
+
+  // initializeOwner(initialOwner: Address) is UNNECESSARY in Ralph and MUST NOT be used, the owner field has to be set directly from outside
+
+  // Internal function to check if caller is owner
+  fn checkOwner() -> () {
+    assert!(externalCallerAddress!() == owner, OwnableUnauthorizedAccount)
+  }
+
+  // Public function to get current owner
+  pub fn owner() -> Address {
+    return owner
+  }
+
+  // Renounce ownership - only owner can call
+  @using(updateFields = true, checkExternalCaller = false)
+  pub fn renounceOwnership() -> () {
+    checkOwner()
+    let oldOwner = owner
+    owner = nullContractAddress!()
+    emit OwnershipTransferred(oldOwner, owner)
+  }
+
+  // Transfer ownership - only owner can call
+  @using(updateFields = true, checkExternalCaller = false)
+  pub fn transferOwnership(newOwner: Address) -> () {
+    checkOwner()
+    assert!(newOwner != nullContractAddress!(), OwnableInvalidOwner)
+    let oldOwner = owner
+    owner = newOwner
+    emit OwnershipTransferred(oldOwner, owner)
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "fullNodeVersion": "v4.0.0",
+  "fullNodeVersion": "v4.2.5",
   "compilerOptionsUsed": {
     "ignoreUnusedConstantsWarnings": false,
     "ignoreUnusedVariablesWarnings": false,
@@ -12,6 +12,18 @@
     "skipTests": false
   },
   "infos": {
+    "AC": {
+      "sourceFile": "ac.ral",
+      "sourceCodeHash": "9f1e93178ffeeaaff8ae462d375077f7e80b1fb44d9709e930118fbd7e63e67e",
+      "bytecodeDebugPatch": "=46-2+af=1-3+200=701-1+e=25-1+5=48+7a7e0214696e73657274206174206d617020706174683a2000=47-1+c=15-1+6=52+7a7e021472656d6f7665206174206d617020706174683a2000=32",
+      "codeHashDebug": "6b9b8232a2e2c16fd4ae5114f85bd5ccb9ffe66c6ab2c4f2ab8bcc619b099232"
+    },
+    "AccessControl": {
+      "sourceFile": "ac.ral",
+      "sourceCodeHash": "9f1e93178ffeeaaff8ae462d375077f7e80b1fb44d9709e930118fbd7e63e67e",
+      "bytecodeDebugPatch": "",
+      "codeHashDebug": ""
+    },
     "Book": {
       "sourceFile": "structs.ral",
       "sourceCodeHash": "8de21a0e65b983f844b95c25b98e8610bef917fe9d724b7c93b97cb11dc2cea8",
@@ -30,8 +42,14 @@
       "bytecodeDebugPatch": "=6-2+44=2-2+84=2-2+e1=2-2+fe=10-2+11=64+7a7e0214696e73657274206174206d617020706174683a2000=149-1+c=112+7a7e021472656d6f7665206174206d617020706174683a2000=70",
       "codeHashDebug": "b3a0fc6c4abd4ccb2d8873781f65988af656899df2415decc79afd8cd760facc"
     },
+    "IAccessControl": {
+      "sourceFile": "ac.ral",
+      "sourceCodeHash": "9f1e93178ffeeaaff8ae462d375077f7e80b1fb44d9709e930118fbd7e63e67e",
+      "bytecodeDebugPatch": "",
+      "codeHashDebug": ""
+    },
     "IFungibleToken": {
-      "sourceFile": "../../../../.npm/_npx/56a1a6da4d410b24/node_modules/@alephium/web3/std/fungible_token_interface.ral",
+      "sourceFile": "../../../../.npm/_npx/951430d37404ad28/node_modules/@alephium/web3/std/fungible_token_interface.ral",
       "sourceCodeHash": "62910bf11e1eeb6cb2fd468626ff606a9b06306b2b81590c3b10f6deb5966bde",
       "bytecodeDebugPatch": "",
       "codeHashDebug": ""
@@ -50,7 +68,7 @@
     },
     "SimpleToken": {
       "sourceFile": "simpleToken.ral",
-      "sourceCodeHash": "1b3d4691b20f625ae84f4d9eeab856574dafaadd18f62b0f55cce0c65fe05e44",
+      "sourceCodeHash": "05558d9c70601e0a66fcd3eba89b79499467b24fef973d9502467e8074929736",
       "bytecodeDebugPatch": "",
       "codeHashDebug": "285528efe3285da5b1f19cff79d6700a0c660a3a711a6e36e15d2021b61262a9"
     },

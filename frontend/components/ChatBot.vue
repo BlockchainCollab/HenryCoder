@@ -250,25 +250,27 @@ const renderMarkdown = (content: string) => {
   }
 };
 
+const scrollToBottom = () => {
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+  }
+};
+
 // Auto-scroll to bottom when new messages arrive
 watch(
   () => messages.value.length,
   async () => {
     await nextTick();
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-    }
+    scrollToBottom();
   }
 );
 
-// Also watch message content for streaming updates
+// Watch the latest message content for streaming updates without reprocessing all messages
 watch(
-  () => messages.value.map(m => m.content).join(''),
+  () => messages.value[messages.value.length - 1]?.content,
   async () => {
     await nextTick();
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-    }
+    scrollToBottom();
   }
 );
 </script>

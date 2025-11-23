@@ -56,7 +56,9 @@ export function useChat() {
   const updateLastMessage = (content: string) => {
     if (messages.value.length > 0) {
       const lastMessage = messages.value[messages.value.length - 1];
-      lastMessage.content = content;
+      if (lastMessage) {
+        lastMessage.content = content;
+      }
     }
   };
 

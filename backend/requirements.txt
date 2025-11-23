@@ -3,8 +3,5 @@ uvicorn
 python-dotenv
 httpx
 openai
-langchain==0.3.13
-langchain-openai==0.2.14
-langchain-community==0.3.13
-faiss-cpu==1.9.0.post1
-tiktoken==0.8.0
+langchain==1.0.8
+langchain-openai==1.0.3

@@ -2,12 +2,14 @@ import logging
 import os
 import time
 from typing import AsyncGenerator
+
 import openai
 from dotenv import load_dotenv
+
 from api_types import TranslateRequest
-from translation_context import RALPH_DETAILS, EXAMPLE_TRANSLATIONS
+from templates import LOG_TEMPLATE, UPGRADE_TEMPLATE, get_user_prompt
 from translate_oz import replace_imports
-from templates import UPGRADE_TEMPLATE, LOG_TEMPLATE, get_user_prompt
+from translation_context import EXAMPLE_TRANSLATIONS, RALPH_DETAILS
 
 load_dotenv()
 
@@ -21,14 +23,11 @@ DUMP_DIR = os.path.join(os.path.dirname(__file__), "dumps")
 MAX_DUMP_LENGTH = 100000
 
 if API_KEY is None or API_URL is None or LLM_MODEL is None or SMART_LLM_MODEL is None:
-    raise RuntimeError(
-        "API_KEY, API_URL, LLM_MODEL and SMART_LLM_MODEL must be set in the environment variables."
-    )
+    raise RuntimeError("API_KEY, API_URL, LLM_MODEL and SMART_LLM_MODEL must be set in the environment variables.")
 
 SYSTEM_PROMPT = (
     "You are an expert EVM to Ralph translator. "
     "Translate the user provided EVM (Solidity) code to Ralph, adhering to the Ralph language specifications and best practices.\n\n"
-    
     "TRANSLATION GUIDELINES:\n"
     "1. Output clean, production-ready Ralph code without instructional comments\n"
     "2. For Solidity interfaces: Convert to Ralph Abstract Contracts or Traits\n"
@@ -36,24 +35,21 @@ SYSTEM_PROMPT = (
     "4. Include only business logic comments, NOT syntax explanation comments\n"
     "5. Use proper Ralph annotations (@using) where needed\n"
     "6. Handle errors with assert! and proper error codes\n\n"
-    
     "AVOID:\n"
     "- Comments like 'Ralph doesn't have X, so we use Y'\n"
     "- Explaining basic syntax differences in comments\n"
     "- Tutorial-style comments\n"
     "- Verbose explanations of language features\n"
     "- Instructional comments about type mappings\n\n"
-    
     "EXPECTED OUTPUT:\n"
     "Just the translated Ralph code with minimal, relevant comments.\n"
     "The code should be ready to use without requiring the user to understand the translation process.\n\n"
-    
     "Ralph Language Details:\n"
     f"{RALPH_DETAILS}\n\n"
-    
     "Example Translations:\n"
     f"{EXAMPLE_TRANSLATIONS}"
 )
+
 
 def preprocess_source_code(source_code: str) -> str:
     """
@@ -61,13 +57,11 @@ def preprocess_source_code(source_code: str) -> str:
     Currently a placeholder for any future preprocessing steps.
     """
 
-
     return source_code
 
 
 async def perform_translation(
-    translate_request: TranslateRequest,
-    stream: bool
+    translate_request: TranslateRequest, stream: bool
 ) -> AsyncGenerator[tuple[str, str, list[str], list[str]], None]:
     """
     Performs the translation using OpenAI-compatible API via the OpenAI Python client.
@@ -103,27 +97,14 @@ async def perform_translation(
         source_code=source_code,
     )
 
-    client = openai.AsyncOpenAI(
-        api_key=API_KEY, base_url=API_URL.replace("/chat/completions", "")
-    )
+    client = openai.AsyncOpenAI(api_key=API_KEY, base_url=API_URL.replace("/chat/completions", ""))
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt}
-    ]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}]
 
     if previous:
+        messages.append({"role": "assistant", "content": previous.source_code})
         messages.append(
-            {
-                "role": "assistant",
-                "content": previous.source_code
-            }
-        )
-        messages.append(
-            {
-                "role": "user",
-                "content": UPGRADE_TEMPLATE.format(previous_errors="\n\n".join(previous.errors))
-            }
+            {"role": "user", "content": UPGRADE_TEMPLATE.format(previous_errors="\n\n".join(previous.errors))}
         )
 
     common_parameters = {
@@ -135,23 +116,17 @@ async def perform_translation(
 
     try:
         if stream:
-            response = await client.chat.completions.create(
-                **common_parameters, stream=True
-            )
+            response = await client.chat.completions.create(**common_parameters, stream=True)
             async for chunk in response:
                 content = getattr(chunk.choices[0].delta, "content", "")
                 reasoning = getattr(chunk.choices[0].delta, "reasoning", "")
                 if content or reasoning:
                     yield content, reasoning, warnings, errors
         else:
-            response = await client.chat.completions.create(
-                **common_parameters, stream=False
-            )
+            response = await client.chat.completions.create(**common_parameters, stream=False)
             translated_code = response.choices[0].message.content
             reasoning = (
-                response.choices[0].message.reasoning
-                if hasattr(response.choices[0].message, "reasoning")
-                else ""
+                response.choices[0].message.reasoning if hasattr(response.choices[0].message, "reasoning") else ""
             )
             yield translated_code, reasoning, warnings, errors
     except Exception as e:

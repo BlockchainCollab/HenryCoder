@@ -35,9 +35,11 @@ SYSTEM_PROMPT = (
     "4. Include only business logic comments, NOT syntax explanation comments\n"
     "5. Use proper Ralph annotations (@using) where needed\n"
     "6. Handle errors with assert! and proper error codes\n\n"
+    "7. Every translated function must include an additional comment explaining the differences in behavior between Solidity and Ralph, if any. These comments must be one line long and start with '@@@'.\n"
+    "   Example: @@@ Solidity allows implicit type conversion, Ralph requires explicit casting.\n\n"
     "AVOID:\n"
-    "- Comments like 'Ralph doesn't have X, so we use Y'\n"
-    "- Explaining basic syntax differences in comments\n"
+    # "- Comments like 'Ralph doesn't have X, so we use Y'\n"
+    # "- Explaining basic syntax differences in comments\n"
     "- Tutorial-style comments\n"
     "- Verbose explanations of language features\n"
     "- Instructional comments about type mappings\n\n"
@@ -97,8 +99,6 @@ async def perform_translation(
         source_code=source_code,
     )
 
-    client = openai.AsyncOpenAI(api_key=API_KEY, base_url=API_URL.replace("/chat/completions", ""))
-
     messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}]
 
     if previous:
@@ -115,20 +115,24 @@ async def perform_translation(
     }
 
     try:
-        if stream:
-            response = await client.chat.completions.create(**common_parameters, stream=True)
-            async for chunk in response:
-                content = getattr(chunk.choices[0].delta, "content", "")
-                reasoning = getattr(chunk.choices[0].delta, "reasoning", "")
-                if content or reasoning:
-                    yield content, reasoning, warnings, errors
-        else:
-            response = await client.chat.completions.create(**common_parameters, stream=False)
-            translated_code = response.choices[0].message.content
-            reasoning = (
-                response.choices[0].message.reasoning if hasattr(response.choices[0].message, "reasoning") else ""
-            )
-            yield translated_code, reasoning, warnings, errors
+        async with openai.AsyncOpenAI(
+            api_key=API_KEY, 
+            base_url=API_URL.replace("/chat/completions", "")
+        ) as client:
+            if stream:
+                response = await client.chat.completions.create(**common_parameters, stream=True)
+                async for chunk in response:
+                    content = getattr(chunk.choices[0].delta, "content", "")
+                    reasoning = getattr(chunk.choices[0].delta, "reasoning", "")
+                    if content or reasoning:
+                        yield content, reasoning, warnings, errors
+            else:
+                response = await client.chat.completions.create(**common_parameters, stream=False)
+                translated_code = response.choices[0].message.content
+                reasoning = (
+                    response.choices[0].message.reasoning if hasattr(response.choices[0].message, "reasoning") else ""
+                )
+                yield translated_code, reasoning, warnings, errors
     except Exception as e:
         raise RuntimeError(f"OpenAI/DeepInfra API request failed: {str(e)}") from e
 

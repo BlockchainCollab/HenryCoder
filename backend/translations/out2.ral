@@ -7,26 +7,26 @@ Interface IStack {
   pub fn pop() -> ()
 }
 
-
-// Ralph doesn't have built-in dynamic arrays, so we'll use mappings to simulate them
+// @@@ Ralph uses explicit mappings for dynamic arrays; Solidity has native dynamic array type with length property and push/pop methods
 Contract Array(
   mut arrLength: U256,
   mut arr2Length: U256,
-  mut myFixedSizeArr: [U256; 10]  // Fixed size array must be declared as contract's field
+  // @@@ Ralph requires fixed-size arrays as contract fields; Solidity allows both storage and memory arrays with dynamic sizing
+  mut myFixedSizeArr: [U256; 10]
 ) implements IStack {
 
-  // Dynamic array simulation using mapping
   mapping[U256, U256] arr
-  mapping[U256, U256] arr2  // Defaults aren't supported in Ralph, so are omitted 
+  // @@@ Ralph doesn't support default mapping values; Solidity mappings return zero for uninitialized keys
+  mapping[U256, U256] arr2
 
-  // Ralph doesn't support constructors like Solidity so constructor functionality is excluded
-
+  // @@@ Ralph initializes state in contract parameters; Solidity uses constructor functions for initialization logic
   @using(updateFields = true, checkExternalCaller = false)
   pub fn setFixed(index: U256, value: U256) -> () {
-    // Set value in fixed size array
+    // @@@ Ralph panics on array out-of-bounds access; Solidity reverts with error message
     myFixedSizeArr[index] = value
   }
 
+  // @@@ Ralph requires explicit contains! check for safe map access; Solidity returns zero for missing keys automatically
   pub fn get(i: U256) -> U256 {
     // Only show below code if mimic solidity defaults is set to true:
     // >>>>>
@@ -37,12 +37,12 @@ Contract Array(
     return arr[i]
   }
 
-  // In Ralph we can't return entire mapping, so this function is not directly translatable
-  // Users would need to call get() for each index they want to access
+  // @@@ Ralph cannot return entire mappings or iterate over keys; Solidity allows returning storage arrays
   // pub fn getArr() -> () {
   //     Not possible in Ralph
   // }
 
+  // @@@ Ralph uses insert! method for adding map entries; Solidity uses direct assignment for array push
   @using(updateFields = true, checkExternalCaller = false)
   pub fn push(i: U256) -> () {
     arr.insert!(arrLength, i)
@@ -56,6 +56,7 @@ Contract Array(
     arr2Length = arr2Length + 1
   }
 
+  // @@@ Ralph requires manual length tracking and remove! call; Solidity's pop() automatically handles both length and storage cleanup
   @using(updateFields = true, checkExternalCaller = false)
   pub fn pop() -> () {
     arrLength = arrLength - 1
@@ -66,6 +67,7 @@ Contract Array(
     return arrLength
   }
 
+  // @@@ Ralph uses explicit panic! for errors; Solidity uses revert/require with error messages
   @using(updateFields = true, checkExternalCaller = false)
   pub fn remove(index: U256) -> () {
     if (index >= arrLength) {
@@ -74,13 +76,11 @@ Contract Array(
     arr.remove!(index)
   }
 
-  // Memory array examples can't be directly translated since Ralph doesn't have memory arrays
-  // The closest would be to use fixed size arrays
+  // @@@ Ralph only supports fixed-size local arrays; Solidity supports both memory and storage dynamic arrays
   pub fn examples() -> U256 {
-    // Fixed size array in Ralph with 5 elements (U256) initialized to 0
     let a = [0; 5]
 
-    // Nested array example
+    // @@@ Ralph supports nested fixed-size arrays; Solidity allows dynamic nested arrays in memory
     let b = [[1, 2, 3], [4, 5, 6]]
 
     return a[0] + b[0][0]

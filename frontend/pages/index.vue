@@ -364,13 +364,17 @@
       >
         <h2 class="text-[20px] font-medium text-white">Ralph Output</h2>
         <div
-          class="flex-1 flex flex-col rounded-[12px] p-4 bg-[#191817] sm:p-6 border border-[#6D5D5D] overflow-hidden"
+          class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
-          <div ref="outputContainer" class="flex-1 overflow-auto min-w-0">
-            <pre
-              v-if="outputCode || loading"
-              class="font-menlo text-sm whitespace-pre text-gray-300 w-max"
-            ><code class="hljs !bg-transparent language-rust" :class="{ 'opacity-50': loading }" v-html="highlightedOutput || (loading ? 'Translating...' + (!!loadingStatus ? ` (${loadingStatus})` : '') : '')"></code></pre>
+          <div ref="outputContainer" class="flex-1 overflow-auto custom-scrollbar">
+            <CodeViewerWithAnnotations
+              v-if="outputCode && !loading"
+              :code="outputCode"
+            />
+            <TranslationProgress
+              v-if="loading"
+              :status-message="loadingStatus"
+            />
             <div
               v-if="!outputCode && !loading && !errors.length"
               class="text-gray-500 text-[length:18px] font-menlo"
@@ -553,6 +557,8 @@ import {
   compileTranslatedCode as apiCompileTranslatedCode,
 } from "@/lib/api";
 import type { PreviousTranslation } from "@/lib/api";
+import CodeViewerWithAnnotations from "@/components/CodeViewerWithAnnotations.vue";
+import TranslationProgress from "@/components/TranslationProgress.vue";
 
 hljs.registerLanguage("rust", rust);
 
@@ -561,7 +567,7 @@ const sourceCode = ref("");
 const outputCode = ref(``);
 const highlightedOutput = ref("");
 const loading = ref(false);
-const loadingStatus = ref(0);
+const loadingStatus = ref("");
 const compiled = ref(false);
 const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
@@ -670,7 +676,7 @@ const closeConsent = () => {
 
 const translateCodeInner = async (initialOutputCode: string, previousTranslation?: PreviousTranslation) => {
   loading.value = true;
-  loadingStatus.value = 0;
+  loadingStatus.value = "";
   compiled.value = false;
   errors.value = [];
   successMessage.value = null;
@@ -681,7 +687,7 @@ const translateCodeInner = async (initialOutputCode: string, previousTranslation
     previousTranslation,
     initialOutputCode,
     setOutputCode: (val: string) => (outputCode.value = val),
-    setLoadingStatus: (val: number) => (loadingStatus.value = val),
+    setLoadingStatus: (val: string) => (loadingStatus.value = val),
     setErrors: (val: string[]) => (errors.value = val)
   });
   loading.value = false;
@@ -776,6 +782,25 @@ textarea {
 }
 
 /* Custom scrollbar styling (optional, for a more polished look) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #312F2D;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #9E9992;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #E5DED7;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

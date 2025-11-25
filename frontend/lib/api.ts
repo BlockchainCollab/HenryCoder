@@ -4,6 +4,30 @@ export type PreviousTranslation = {
   errors: string[];
 };
 
+type AgentChunk = 
+  | { type: "stage"; data: { stage: string; message: string } }
+  | { type: "tool_start"; data: { tool: string; input: string } }
+  | { type: "tool_end"; data: { tool: string; success: boolean } }
+  | { type: "content"; data: string };
+
+// Helper function to extract Ralph code from content
+function extractRalphCode(content: string): string {
+  // Remove "Translated Ralph code:" prefix if present
+  let cleaned = content.replace(/^Translated Ralph code:\s*\n?/i, '');
+  
+  // Extract code between ```ralph and ```
+  const ralphMatch = cleaned.match(/```ralph\s*\n([\s\S]*?)```/);
+  if (ralphMatch && ralphMatch[1]) {
+    return ralphMatch[1].trim();
+  }
+  
+  // Fallback: try to remove any markdown code blocks
+  cleaned = cleaned.replace(/```ralph\s*\n?/g, '');
+  cleaned = cleaned.replace(/```\s*$/g, '');
+  
+  return cleaned.trim();
+}
+
 export async function translateCode({
   sourceCode,
   options,
@@ -20,121 +44,123 @@ export async function translateCode({
   initialOutputCode: string;
   previousTranslation?: PreviousTranslation;
   setOutputCode: (val: string) => void;
-  setLoadingStatus: (val: number) => void;
+  setLoadingStatus: (val: string) => void;
   setErrors: (val: string[]) => void;
-}) {
+  }) {
+  const sessionId = ref<string>(crypto.randomUUID());
   setOutputCode(initialOutputCode);
   setErrors([]);
-  let output = initialOutputCode;
+  setLoadingStatus("");
+  
+  let accumulatedContent = "";
+  
   try {
     const response = await fetch(
-      `${runtimeConfig.public.apiBase}/translate/stream`,
+      `${runtimeConfig.public.apiBase}/chat/stream`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          source_code: sourceCode,
-          options: {
-            optimize: options.optimize,
-            include_comments: options.includeComments,
-            mimic_defaults: options.mimicDefaults,
-            smart: options.smart,
-            translate_erc20: options.translateERC20,
-          },
-          previous_translation: previousTranslation,
+          message: sourceCode,
+          session_id: sessionId.value,
+          // options: {
+          //   optimize: options.optimize,
+          //   include_comments: options.includeComments,
+          //   mimic_defaults: options.mimicDefaults,
+          //   smart: options.smart,
+          //   translate_erc20: options.translateERC20,
+          // },
+          // previous_translation: previousTranslation,
         }),
       }
     );
+    
     if (!response.ok || !response.body) {
       const errorData = await response
         .json()
         .catch(() => ({ detail: "Translation failed with non-JSON response" }));
       throw new Error(errorData.detail || "Translation failed");
     }
+    
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let done = false;
     let buffer = "";
-    let thoughts_size = 0;
-    setOutputCode("");
-    setErrors([]);
     let errorsArr: string[] = [];
+    
     while (!done) {
       const { value, done: streamDone } = await reader.read();
       done = streamDone;
+      
       if (value) {
         buffer += decoder.decode(value, { stream: true });
         let lines = buffer.split("\n");
         buffer = lines.pop() || "";
+        
         for (const line of lines) {
           if (!line.trim()) continue;
+          
           try {
-            const data = JSON.parse(line);
-            if (data.translated_code) {
-              output += data.translated_code;
-              setOutputCode(output);
+            const chunk = JSON.parse(line) as AgentChunk;
+            
+            // Handle stage updates for progress indicator
+            if (chunk.type === "stage") {
+              setLoadingStatus(chunk.data.message);
             }
-            if (data.reasoning_chunk) {
-              thoughts_size += data.reasoning_chunk.length;
-              setLoadingStatus(thoughts_size);
+            
+            // Accumulate content chunks
+            if (chunk.type === "content") {
+              accumulatedContent += chunk.data;
+              
+              // Try to extract and display Ralph code if we have the full code block
+              if (accumulatedContent.includes("```ralph") && accumulatedContent.includes("```\n")) {
+                const ralphCode = extractRalphCode(accumulatedContent);
+                if (ralphCode) {
+                  setOutputCode(ralphCode);
+                }
+              }
             }
-            if (data.warnings && data.warnings.length > 0) {
-              errorsArr = [
-                ...errorsArr,
-                ...data.warnings.map((w: string) => `Warning: ${w}`),
-              ];
+            
+            // Handle tool execution (for future agentic view)
+            if (chunk.type === "tool_start") {
+              setLoadingStatus(`🔧 Using tool: ${chunk.data.tool}`);
             }
-            if (data.errors && data.errors.length > 0) {
-              errorsArr = [
-                ...errorsArr,
-                ...data.errors.map((e: string) => String(e)),
-              ];
-            }
+            
           } catch (e) {
             // Ignore JSON parse errors for incomplete lines
           }
         }
       }
     }
+    
     // Handle any remaining buffered line
     if (buffer.trim()) {
       try {
-        const data = JSON.parse(buffer);
-        if (data.translated_code) {
-          output += data.translated_code;
-        }
-        if (data.warnings && data.warnings.length > 0) {
-          errorsArr = [
-            ...errorsArr,
-            ...data.warnings.map((w: string) => `Warning: ${w}`),
-          ];
-        }
-        if (data.errors && data.errors.length > 0) {
-          errorsArr = [
-            ...errorsArr,
-            ...data.errors.map((e: string) => String(e)),
-          ];
+        const chunk = JSON.parse(buffer) as AgentChunk;
+        if (chunk.type === "content") {
+          accumulatedContent += chunk.data;
         }
       } catch (e) {
         // Ignore
       }
     }
-    if (output.startsWith("```ralph")) {
-      // Remove the initial code block marker
-      output = output.replace(/^```ralph\s*\n/, "");
-      // Remove the final code block marker
-      if (output.endsWith("```")) {
-        output = output.slice(0, -3).trim();
-      }
+    
+    // Final extraction of Ralph code
+    const finalRalphCode = extractRalphCode(accumulatedContent);
+    if (finalRalphCode) {
+      setOutputCode(finalRalphCode);
     }
-    setOutputCode(output);
+    
+    setLoadingStatus("✅ Translation complete");
     setErrors(errorsArr);
+    
   } catch (e: any) {
     console.error("Translation error:", e);
     const errorMessage = e instanceof Error ? e.message : String(e);
     setErrors([errorMessage]);
+    setLoadingStatus("");
   }
 }
 

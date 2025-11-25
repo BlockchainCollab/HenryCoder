@@ -9,6 +9,7 @@ USER_PROMPT_TEMPLATE = (
     '- MUST NOT use commas "," in enums.\n'
     "- MUST NOT define state variables inside contract body.\n"
     '- MUST NOT use an underscore "_" in front of a function name.\n'
+    '- MUST include // @@@ annotations for crucial behavioral differences between Solidity and Ralph.\n'
 )
 
 ERC20_NOTICE = "Translate ERC20 transfers and approvals to native Alephium tokens. Translate token addresses to `ByteVec`.  Comment out other calls to IERC20 methods and notice that they are unsupported."

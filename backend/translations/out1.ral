@@ -1,29 +1,30 @@
-// Struct must be defined outside contract
+// @@@ Ralph requires struct definitions outside contracts; Solidity allows inline struct declarations
 struct Todo {
   mut text: ByteVec,
   mut completed: Bool
 }
 
 Contract ContractWithList(mut todosLength: U256) {
-  // Ralph doesn't have a built-in array type, but we can use a mapping to simulate an array.
-  // The mapping key is the index of the todo item.
+  // @@@ Ralph uses explicit mappings for dynamic arrays; Solidity has native dynamic array type with push/pop
   mapping[U256, Todo] todos
 
+  // @@@ Ralph requires explicit @using annotation for field mutations; Solidity allows implicit state changes
   @using(checkExternalCaller = false, updateFields = true)
   pub fn create(text: ByteVec) -> () {
+    // @@@ Ralph uses insert! for adding map entries; Solidity uses direct assignment for array push
     todos.insert!(todosLength, Todo { text: text, completed: false })
     todosLength = todosLength + 1
   }
 
+  // @@@ Ralph panics on missing map keys by default; Solidity returns zero-initialized struct for out-of-bounds array access
   pub fn get(index: U256) -> Todo {
     // Only show below code if mimic solidity defaults is set to true:
     // >>>>>
     if (!todos.contains!(index)) {
-      // The default value of a struct is all fields set to 0 or false
+      // @@@ Ralph requires explicit default handling with contains! check; Solidity automatically returns default values
       return Todo { text: #, completed: false }
     }
     // <<<<<
     return todos[index]
   }
 }
-

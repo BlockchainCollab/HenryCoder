@@ -267,7 +267,7 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
                 translated = loop.run_until_complete(_get_translation())
 
                 logger.warning(f"Translation completed. Output length: {len(translated)}")
-                return f"Translated Ralph code:\n```ralph\n{translated}\n```"
+                return f"Translated Ralph code:\n```ralph\n{translated}\n```\n\n"
             except Exception as e:
                 logger.error(f"Translation tool error: {e}", exc_info=True)
                 return f"Error translating code: {str(e)}"
@@ -421,6 +421,25 @@ Add buying, cancelation, and fee logic to suit your use case.
 
                     elif event_type == "on_tool_end":
                         tool_name = event.get("name", "unknown")
+                        tool_data = event.get("data", {})
+                        tool_output = tool_data.get("output")
+                        
+                        # ✅ Extract string content from ToolMessage
+                        if tool_output:
+                            # ToolMessage has a .content attribute with the actual string
+                            if hasattr(tool_output, 'content'):
+                                output_text = tool_output.content
+                            elif isinstance(tool_output, str):
+                                output_text = tool_output
+                            elif isinstance(tool_output, dict):
+                                output_text = tool_output.get("output", "")
+                            else:
+                                # Fallback: convert to string
+                                output_text = str(tool_output)
+                            
+                            # Now send the string, not the ToolMessage object
+                            if tool_name == "translate_evm_to_ralph" and output_text:
+                                yield StreamEvent.content(output_text)
                         yield StreamEvent.tool_end(tool_name)
 
                     elif event_type == "on_chat_model_stream":

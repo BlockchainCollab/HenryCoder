@@ -167,7 +167,20 @@
                 class="text-[#EF8510] text-[length:16px] font-semibold leading-6"
               >
                 By clicking <span class="text-[#F3BA7B]">Translate</span>, you
-                consent to <a href="/tos" target="_blank" class="underline text-[#F3BA7B] hover:text-[#EF8510]">Terms of Service</a> and <a href="/privacy" target="_blank" class="underline text-[#F3BA7B] hover:text-[#EF8510]">privacy&nbsp;policy</a>.
+                consent to
+                <a
+                  href="/tos"
+                  target="_blank"
+                  class="underline text-[#F3BA7B] hover:text-[#EF8510]"
+                  >Terms of Service</a
+                >
+                and
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  class="underline text-[#F3BA7B] hover:text-[#EF8510]"
+                  >privacy&nbsp;policy</a
+                >.
               </p>
               <button class="h-fit w-fit" @click="closeConsent">
                 <svg
@@ -306,7 +319,9 @@
                       <Checkbox
                         id="translateERC20"
                         :model-value="options.translateERC20"
-                        @update:model-value="(val) => (options.translateERC20 = Boolean(val))"
+                        @update:model-value="
+                          (val) => (options.translateERC20 = Boolean(val))
+                        "
                         class="custom-checkbox"
                       />
                       <Label for="translateERC20" class="checkbox-label"
@@ -318,7 +333,9 @@
                       <Checkbox
                         id="autoCompile"
                         :model-value="options.autoCompile"
-                        @update:model-value="(val) => (options.autoCompile = Boolean(val))"
+                        @update:model-value="
+                          (val) => (options.autoCompile = Boolean(val))
+                        "
                         class="custom-checkbox"
                       />
                       <Label for="autoCompile" class="checkbox-label"
@@ -329,7 +346,9 @@
                       <Checkbox
                         id="smart"
                         :model-value="options.smart"
-                        @update:model-value="(val) => (options.smart = Boolean(val))"
+                        @update:model-value="
+                          (val) => (options.smart = Boolean(val))
+                        "
                         class="custom-checkbox"
                       />
                       <Label for="smart" class="checkbox-label"
@@ -366,40 +385,45 @@
         <div
           class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
-          <div ref="outputContainer" class="flex-1 overflow-auto custom-scrollbar">
-            <CodeViewerWithAnnotations
-              v-if="outputCode && !loading"
-              :code="outputCode"
-            />
-            <TranslationProgress
-              v-if="loading"
-              :status-message="loadingStatus"
-            />
+          <div className="relative flex-1 flex flex-col overflow-hidden">
             <div
-              v-if="!outputCode && !loading && !errors.length"
-              class="text-gray-500 text-[length:18px] font-menlo"
+              ref="outputContainer"
+              class="flex-1 overflow-auto custom-scrollbar"
             >
-              Translation will appear here ✨
-            </div>
-            <!-- Success Display Section -->
-            <section v-if="successMessage && !loading" class="mt-2 p-1">
+              <CodeViewerWithAnnotations
+                v-if="outputCode && !loading"
+                :code="outputCode"
+              />
+              <TranslationProgress
+                v-if="loading"
+                :status-message="loadingStatus"
+              />
               <div
-                class="text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+                v-if="!outputCode && !loading && !errors.length"
+                class="text-gray-500 text-[length:18px] font-menlo"
               >
-                <ul>
-                  <li class="font-mono text-xs">{{ successMessage }}</li>
-                </ul>
+                Translation will appear here ✨
               </div>
-            </section>
-            <!-- Error Display Section (Integrated into Output Panel) -->
-            <section v-if="errors.length > 0 && !loading" class="mt-2 p-1">
-              <div
-                :class="[
-                  'text-[#E15959] border-[#E15959] bg-[#2A1A1A]',
-                  'text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto',
-                ]"
-              >
-                <ul>
+              <!-- Success Display Section -->
+              <section v-if="successMessage && !loading" class="mt-2 p-1">
+                <div
+                  class="text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+                >
+                  <ul>
+                    <li class="font-mono text-xs">{{ successMessage }}</li>
+                  </ul>
+                </div>
+              </section>
+            </div>
+            <!-- Error Display Section (Pinned to bottom with close button) -->
+            <div
+              v-if="errors.length > 0 && !loading && errorsOpen"
+              class="absolute bottom-0 left-0 right-0 p-3 pl-6 flex gap-x-[10px] bg-[#2A1A1A] rounded-[10px] border border-[#E15959] shadow-[0_0_6px_1px_rgba(225,89,89,0.70)]"
+            >
+              <div class="flex-1 max-h-32 overflow-y-auto">
+                <ul
+                  class="text-[#E15959] text-[length:16px] font-semibold leading-6"
+                >
                   <li
                     v-for="(error, index) in errors"
                     :key="index"
@@ -409,7 +433,31 @@
                   </li>
                 </ul>
               </div>
-            </section>
+              <button class="h-fit w-fit" @click="closeErrors">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="21"
+                  viewBox="0 0 20 21"
+                  fill="none"
+                >
+                  <path
+                    d="M15 5.34399L5 15.344"
+                    stroke="#E15959"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M5 5.34399L15 15.344"
+                    stroke="#E15959"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
           <div
             v-if="outputCode && !loading"
@@ -474,7 +522,8 @@
         Looking to build innovative blockchain products?
       </h2>
       <p class="text-white text-[length:16px] mb-[36px] text-center">
-        Discover our cutting-edge suite of web3 and AI solutions designed for developers and blockchain innovators.
+        Discover our cutting-edge suite of web3 and AI solutions designed for
+        developers and blockchain innovators.
       </p>
       <a
         href="https://blockchain-collab.com/alephium"
@@ -585,6 +634,7 @@ const options = ref({
 const copied = ref(false);
 const isScrolled = ref(false);
 const consentOpen = ref(true);
+const errorsOpen = ref(true);
 const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 const outputContainer = ref<HTMLElement | null>(null);
 
@@ -674,11 +724,19 @@ const closeConsent = () => {
   consentOpen.value = false;
 };
 
-const translateCodeInner = async (initialOutputCode: string, previousTranslation?: PreviousTranslation) => {
+const closeErrors = () => {
+  errorsOpen.value = false;
+};
+
+const translateCodeInner = async (
+  initialOutputCode: string,
+  previousTranslation?: PreviousTranslation
+) => {
   loading.value = true;
   loadingStatus.value = "";
   compiled.value = false;
   errors.value = [];
+  errorsOpen.value = true;
   successMessage.value = null;
   await apiTranslateCode({
     sourceCode: sourceCode.value,
@@ -688,7 +746,7 @@ const translateCodeInner = async (initialOutputCode: string, previousTranslation
     initialOutputCode,
     setOutputCode: (val: string) => (outputCode.value = val),
     setLoadingStatus: (val: string) => (loadingStatus.value = val),
-    setErrors: (val: string[]) => (errors.value = val)
+    setErrors: (val: string[]) => (errors.value = val),
   });
   loading.value = false;
   if (options.value.autoCompile && errors.value.length === 0) {
@@ -754,20 +812,19 @@ const compileTranslatedCode = async () => {
 
 const upgradeTranslatedCode = async () => {
   upgradeCounter.value++;
-  let code = ""
+  let code = "";
   if (upgradeCounter.value == 3) {
-    code += "// Not all EVM features are supported on Alephium\n"
-    code += "// In some cases compiler error messages may not be sufficient to debug the issue\n"
-    code += "// If you encounter problems, see supported features on GitHub or try building locally\n"
+    code += "// Not all EVM features are supported on Alephium\n";
+    code +=
+      "// In some cases compiler error messages may not be sufficient to debug the issue\n";
+    code +=
+      "// If you encounter problems, see supported features on GitHub or try building locally\n";
   }
-  return translateCodeInner(
-    code,
-    {
-      source_code: outputCode.value,
-      warnings: [],
-      errors: errors.value,
-    }
-  )
+  return translateCodeInner(code, {
+    source_code: outputCode.value,
+    warnings: [],
+    errors: errors.value,
+  });
 };
 </script>
 
@@ -788,17 +845,17 @@ textarea {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #312F2D;
+  background: #312f2d;
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #9E9992;
+  background: #9e9992;
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #E5DED7;
+  background: #e5ded7;
 }
 
 ::-webkit-scrollbar {

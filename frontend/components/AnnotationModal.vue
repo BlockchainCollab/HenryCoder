@@ -7,7 +7,7 @@
         </SheetTitle>
       </SheetHeader>
       <div class="mt-4 mb-6">
-        <p class="text-[#E5DED7] text-base leading-relaxed">
+        <p class="text-[#E5DED7] text-[16px] leading-relaxed">
           {{ annotation }}
         </p>
       </div>

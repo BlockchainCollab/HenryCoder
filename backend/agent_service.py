@@ -39,6 +39,41 @@ LLM_MODEL = os.getenv("LLM_MODEL", "mistralai/mistral-small-3.2-24b-instruct")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "mistralai/mistral-small-3.2-24b-instruct")
 
 
+# Global context for current session during tool execution
+_current_session_options: Optional[Dict[str, Any]] = None
+
+
+def get_current_session_options() -> Dict[str, Any]:
+    """
+    Get translation options from current session context.
+    
+    Returns:
+        Dictionary with translation options (optimize, include_comments, etc.)
+        Returns default values if no session context is set.
+    """
+    if _current_session_options:
+        return _current_session_options
+    # Return default options
+    return {
+        "optimize": False,
+        "include_comments": True,
+        "mimic_defaults": False,
+        "smart": False,
+        "translate_erc20": False,
+    }
+
+
+def set_session_options_context(options: Optional[Dict[str, Any]]) -> None:
+    """
+    Set current session options context for tool execution.
+    
+    Args:
+        options: Dictionary with translation options or None to clear context
+    """
+    global _current_session_options
+    _current_session_options = options
+
+
 def parse_import_line(line: str) -> str:
     """
     Extracts the import path from a Solidity import statement.
@@ -157,6 +192,9 @@ class ChatAgent:
 
         # Session storage for conversation history
         self.sessions: Dict[str, List[Dict[str, str]]] = {}
+        
+        # Session storage for translation options
+        self.session_options: Dict[str, Dict[str, Any]] = {}
 
     def _create_tools(self) -> List:
         """Create tools the agent can use."""
@@ -216,6 +254,9 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
         def translate_evm_to_ralph(code: str) -> str:
             """
             Translates EVM/Solidity code to Ralph language for Alephium blockchain.
+            
+            Uses the translation preferences set by the user at the beginning of the conversation.
+            These preferences control optimization, comments, and other translation behaviors.
 
             IMPORTANT: If the code contains 'import' statements, use resolve_solidity_imports FIRST.
             """
@@ -238,15 +279,19 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
                         code = f"{replacement_text}\n\n{code}"
                         logger.warning("Fallback preprocessing completed")
 
-                # Use smart mode for faster translations
+                # Get options from session context
+                session_opts = get_current_session_options()
+                logger.warning(f"Using session options: {session_opts}")
+
+                # Create translation request with session options
                 request = TranslateRequest(
                     source_code=code,
                     options=TranslationOptions(
-                        optimize=False,
-                        include_comments=True,
-                        mimic_defaults=False,
-                        translate_erc20=False,
-                        smart=True,
+                        optimize=session_opts.get("optimize", False),
+                        include_comments=session_opts.get("include_comments", True),
+                        mimic_defaults=session_opts.get("mimic_defaults", False),
+                        translate_erc20=session_opts.get("translate_erc20", False),
+                        smart=session_opts.get("smart", False),
                     ),
                 )
 
@@ -379,6 +424,7 @@ Add buying, cancelation, and fee logic to suit your use case.
         message: str,
         session_id: str = "default",
         stream: bool = True,
+        options: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Process a chat message and yield streaming events.
@@ -387,6 +433,7 @@ Add buying, cancelation, and fee logic to suit your use case.
             message: User's message
             session_id: Session identifier for conversation history
             stream: Whether to stream the response
+            options: Translation options (stored in session on first message)
 
         Yields:
             Dict with event type and data
@@ -404,6 +451,16 @@ Add buying, cancelation, and fee logic to suit your use case.
             # Get or create message history for this session
             if session_id not in self.sessions:
                 self.sessions[session_id] = []
+
+            # Store options if provided (typically on first message)
+            if options is not None:
+                self.set_session_options(session_id, options)
+                logger.info(f"Options set for session {session_id}: {options}")
+
+            # Set session context for tools to access
+            session_opts = self.get_session_options(session_id)
+            set_session_options_context(session_opts)
+            logger.info(f"Session context set with options: {session_opts}")
 
             # Invoke the agent with streaming
             full_response = ""
@@ -473,16 +530,52 @@ Add buying, cancelation, and fee logic to suit your use case.
             except Exception as e:
                 logger.error(f"Agent invocation error: {e}", exc_info=True)
                 yield StreamEvent.error(f"Error: {str(e)}")
+            finally:
+                # Clean up session context after execution
+                set_session_options_context(None)
+                logger.info("Session context cleaned up")
 
         except Exception as e:
             logger.error(f"Chat agent error: {e}", exc_info=True)
             yield StreamEvent.error(f"Error: {str(e)}")
+
+    def set_session_options(self, session_id: str, options: Dict[str, Any]) -> None:
+        """
+        Store translation options for a session.
+        
+        Args:
+            session_id: Session identifier
+            options: Dictionary with translation options
+        """
+        self.session_options[session_id] = options
+        logger.info(f"Stored options for session {session_id}: {options}")
+
+    def get_session_options(self, session_id: str) -> Dict[str, Any]:
+        """
+        Get translation options for a session.
+        
+        Args:
+            session_id: Session identifier
+            
+        Returns:
+            Dictionary with translation options or default values
+        """
+        return self.session_options.get(session_id, {
+            "optimize": False,
+            "include_comments": True,
+            "mimic_defaults": False,
+            "smart": False,
+            "translate_erc20": False,
+        })
 
     def clear_session(self, session_id: str) -> None:
         """Clear conversation history for a session."""
         if session_id in self.sessions:
             del self.sessions[session_id]
             logger.info(f"Cleared session: {session_id}")
+        if session_id in self.session_options:
+            del self.session_options[session_id]
+            logger.info(f"Cleared options for session: {session_id}")
 
 
 # Global agent instance

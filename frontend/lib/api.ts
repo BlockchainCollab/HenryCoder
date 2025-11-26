@@ -65,14 +65,13 @@ export async function translateCode({
         body: JSON.stringify({
           message: sourceCode,
           session_id: sessionId.value,
-          // options: {
-          //   optimize: options.optimize,
-          //   include_comments: options.includeComments,
-          //   mimic_defaults: options.mimicDefaults,
-          //   smart: options.smart,
-          //   translate_erc20: options.translateERC20,
-          // },
-          // previous_translation: previousTranslation,
+          options: {
+            optimize: options.optimize,
+            include_comments: options.includeComments,
+            mimic_defaults: options.mimicDefaults,
+            smart: options.smart,
+            translate_erc20: options.translateERC20,
+          },
         }),
       }
     );

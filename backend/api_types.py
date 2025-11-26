@@ -41,6 +41,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default"
     context: Optional[Dict[str, Any]] = None  # Additional context (e.g., current code)
+    options: Optional[Dict[str, Any]] = None  # Translation options (optimize, include_comments, etc.)
 
 
 class ChatResponse(BaseModel):

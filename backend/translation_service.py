@@ -25,32 +25,52 @@ MAX_DUMP_LENGTH = 100000
 if API_KEY is None or API_URL is None or LLM_MODEL is None or SMART_LLM_MODEL is None:
     raise RuntimeError("API_KEY, API_URL, LLM_MODEL and SMART_LLM_MODEL must be set in the environment variables.")
 
-SYSTEM_PROMPT = (
-    "You are an expert EVM to Ralph translator. "
-    "Translate the user provided EVM (Solidity) code to Ralph, adhering to the Ralph language specifications and best practices.\n\n"
-    "TRANSLATION GUIDELINES:\n"
-    "1. Output clean, production-ready Ralph code without instructional comments\n"
-    "2. For Solidity interfaces: Convert to Ralph Abstract Contracts or Traits\n"
-    "3. For Solidity contracts: Provide complete, working Ralph contract implementations\n"
-    "4. Include only business logic comments, NOT syntax explanation comments\n"
-    "5. Use proper Ralph annotations (@using) where needed\n"
-    "6. Handle errors with assert! and proper error codes\n\n"
-    "7. Every translated function must include an additional comment explaining the differences in behavior between Solidity and Ralph, if any. These comments must be one line long and start with '@@@'.\n"
-    "   Example: @@@ Solidity allows implicit type conversion, Ralph requires explicit casting.\n\n"
-    "AVOID:\n"
-    # "- Comments like 'Ralph doesn't have X, so we use Y'\n"
-    # "- Explaining basic syntax differences in comments\n"
-    "- Tutorial-style comments\n"
-    "- Verbose explanations of language features\n"
-    "- Instructional comments about type mappings\n\n"
-    "EXPECTED OUTPUT:\n"
-    "Just the translated Ralph code with minimal, relevant comments.\n"
-    "The code should be ready to use without requiring the user to understand the translation process.\n\n"
-    "Ralph Language Details:\n"
-    f"{RALPH_DETAILS}\n\n"
-    "Example Translations:\n"
-    f"{EXAMPLE_TRANSLATIONS}"
-)
+def build_translation_system_prompt() -> str:
+    """
+    Builds the system prompt for translation based on provided options.
+    
+    Args:
+        optimize: Whether to apply performance optimizations
+        include_comments: Whether to include explanatory comments
+        mimic_defaults: Whether to mimic Solidity defaults for map access
+        smart: Whether to use smart/advanced translation mode
+        translate_erc20: Whether to translate ERC20 to native Alephium tokens
+    
+    Returns:
+        The complete system prompt string
+    """
+    base_prompt = (
+        "You are an expert EVM to Ralph translator. "
+        "Translate the user provided EVM (Solidity) code to Ralph, adhering to the Ralph language specifications and best practices.\n\n"
+        "TRANSLATION GUIDELINES:\n"
+        "1. Output clean, production-ready Ralph code without instructional comments\n"
+        "2. For Solidity interfaces: Convert to Ralph Abstract Contracts or Traits\n"
+        "3. For Solidity contracts: Provide complete, working Ralph contract implementations\n"
+        "4. Include only business logic comments, NOT syntax explanation comments\n"
+        "5. Use proper Ralph annotations (@using) where needed\n"
+        "6. Handle errors with assert! and proper error codes\n\n"
+        "7. Every translated function must include an additional comment explaining the differences in behavior between Solidity and Ralph, if any. These comments must be one line long and start with '@@@'.\n"
+        "   Example: @@@ Solidity allows implicit type conversion, Ralph requires explicit casting.\n\n"
+        "AVOID:\n"
+        # "- Comments like 'Ralph doesn't have X, so we use Y'\n"
+        # "- Explaining basic syntax differences in comments\n"
+        "- Tutorial-style comments\n"
+        "- Verbose explanations of language features\n"
+        "- Instructional comments about type mappings\n\n"
+        "EXPECTED OUTPUT:\n"
+        "Just the translated Ralph code with minimal, relevant comments.\n"
+        "The code should be ready to use without requiring the user to understand the translation process.\n\n"
+        "Ralph Language Details:\n"
+        f"{RALPH_DETAILS}\n\n"
+        "Example Translations:\n"
+        f"{EXAMPLE_TRANSLATIONS}"
+    )
+    
+    return base_prompt
+
+
+# Keep original SYSTEM_PROMPT for backwards compatibility
+SYSTEM_PROMPT = build_translation_system_prompt()
 
 
 def preprocess_source_code(source_code: str) -> str:
@@ -99,7 +119,10 @@ async def perform_translation(
         source_code=source_code,
     )
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}]
+    # Build system prompt with options
+    system_prompt = build_translation_system_prompt()
+
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
     if previous:
         messages.append({"role": "assistant", "content": previous.source_code})

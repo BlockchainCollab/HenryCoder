@@ -110,13 +110,17 @@ logger = logging.getLogger(__name__)
 async def chat_stream(request: ChatRequest):
     """
     Streams chat responses with stage updates from the LangChain agent.
+    Accepts optional translation options that are stored for the session.
     """
     agent = get_agent()
 
     async def chat_generator():
         try:
             async for event in agent.chat(
-                message=request.message, session_id=request.session_id or "default", stream=True
+                message=request.message,
+                session_id=request.session_id or "default",
+                stream=True,
+                options=request.options,  # Pass options to agent
             ):
                 # Send event as JSON line
                 yield json.dumps(event) + "\n"
@@ -132,13 +136,17 @@ async def chat_stream(request: ChatRequest):
 async def chat(request: ChatRequest):
     """
     Non-streaming chat endpoint.
+    Accepts optional translation options that are stored for the session.
     """
     agent = get_agent()
 
     response_text = ""
     try:
         async for event in agent.chat(
-            message=request.message, session_id=request.session_id or "default", stream=False
+            message=request.message,
+            session_id=request.session_id or "default",
+            stream=False,
+            options=request.options,  # Pass options to agent
         ):
             if event.get("type") == "content":
                 response_text += event.get("data", "")

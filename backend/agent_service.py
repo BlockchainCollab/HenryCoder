@@ -7,8 +7,9 @@ import asyncio
 import json
 import logging
 import os
+import queue
 import re
-from typing import Any, AsyncGenerator, Dict, List, Literal, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, List, Literal, Optional, Union
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
@@ -18,6 +19,10 @@ from langchain_openai import ChatOpenAI
 from api_types import TranslateRequest, TranslationOptions
 from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT
 from translation_service import perform_translation
+
+
+# Type for translation chunk callback
+TranslationChunkCallback = Callable[[str], None]
 
 load_dotenv()
 
@@ -41,6 +46,8 @@ AGENT_MODEL = os.getenv("AGENT_MODEL", "mistralai/mistral-small-3.2-24b-instruct
 
 # Global context for current session during tool execution
 _current_session_options: Optional[Dict[str, Any]] = None
+# Thread-safe queue for translation chunks (can be written from any thread)
+_current_translation_queue: Optional[queue.Queue] = None
 
 
 def get_current_session_options() -> Dict[str, Any]:
@@ -72,6 +79,29 @@ def set_session_options_context(options: Optional[Dict[str, Any]]) -> None:
     """
     global _current_session_options
     _current_session_options = options
+
+
+def get_translation_queue() -> Optional[queue.Queue]:
+    """Get the current translation streaming queue (thread-safe)."""
+    return _current_translation_queue
+
+
+def set_translation_queue(q: Optional[queue.Queue]) -> None:
+    """Set the translation streaming queue for the current session."""
+    global _current_translation_queue
+    _current_translation_queue = q
+
+
+async def emit_translation_chunk(chunk: str) -> None:
+    """
+    Emit a translation chunk to the streaming queue.
+    
+    Args:
+        chunk: Translation chunk to emit
+    """
+    queue = get_translation_queue()
+    if queue is not None:
+        await queue.put({"type": "translation_chunk", "data": chunk})
 
 
 def parse_import_line(line: str) -> str:
@@ -127,6 +157,11 @@ class StreamEvent:
     def content(chunk: str) -> Dict[str, Any]:
         """Content chunk event."""
         return {"type": "content", "data": chunk}
+
+    @staticmethod
+    def translation_chunk(chunk: str) -> Dict[str, Any]:
+        """Translation chunk event - streamed directly from translator."""
+        return {"type": "translation_chunk", "data": chunk}
 
     @staticmethod
     def stage(stage: AgentStage, message: str = "") -> Dict[str, Any]:
@@ -251,7 +286,7 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
                 return f"❌ Error resolving imports: {str(e)}"
 
         @tool
-        def translate_evm_to_ralph(code: str) -> str:
+        async def translate_evm_to_ralph(code: str) -> str:
             """
             Translates EVM/Solidity code to Ralph language for Alephium blockchain.
             
@@ -295,23 +330,20 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
                     ),
                 )
 
+                chunk_queue = get_translation_queue()
+                
+                # Run translation directly in this async context, streaming chunks
                 translated = ""
-
-                async def _get_translation():
-                    result = ""
-                    async for chunk, _, _, _ in perform_translation(request, stream=False):
-                        result += chunk
-                    return result
-
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-
-                translated = loop.run_until_complete(_get_translation())
+                async for chunk, _, _, _ in perform_translation(request, stream=True):
+                    if chunk:
+                        translated += chunk
+                        # Push chunk to thread-safe queue for immediate streaming
+                        if chunk_queue is not None:
+                            chunk_queue.put(StreamEvent.translation_chunk(chunk))
 
                 logger.warning(f"Translation completed. Output length: {len(translated)}")
+                
+                # Return the translated code
                 return f"Translated Ralph code:\n```ralph\n{translated}\n```\n\n"
             except Exception as e:
                 logger.error(f"Translation tool error: {e}", exc_info=True)
@@ -438,6 +470,11 @@ Add buying, cancelation, and fee logic to suit your use case.
         Yields:
             Dict with event type and data
         """
+        # Create a thread-safe queue for translation chunks (written from tool thread)
+        translation_chunk_queue: queue.Queue = queue.Queue()
+        # Create an async queue for agent events
+        agent_event_queue: asyncio.Queue = asyncio.Queue()
+        
         try:
             # Initial stage
             yield StreamEvent.stage("thinking", "Analyzing your request...")
@@ -460,65 +497,108 @@ Add buying, cancelation, and fee logic to suit your use case.
             # Set session context for tools to access
             session_opts = self.get_session_options(session_id)
             set_session_options_context(session_opts)
+            set_translation_queue(translation_chunk_queue)
             logger.info(f"Session context set with options: {session_opts}")
 
             # Invoke the agent with streaming
             full_response = ""
+            agent_done = False
+            
             try:
                 yield StreamEvent.stage("generating", "Processing...")
 
-                # Stream events from the agent directly
-                async for event in self.agent.astream_events({"messages": [{"role": "user", "content": message}]}):
-                    event_type = event.get("event")
+                async def run_agent_and_emit_events():
+                    """Run the agent and push all events to the async queue."""
+                    nonlocal full_response, agent_done
+                    try:
+                        async for event in self.agent.astream_events({"messages": [{"role": "user", "content": message}]}):
+                            event_type = event.get("event")
 
-                    if event_type == "on_tool_start":
-                        tool_name = event.get("name", "unknown")
-                        yield StreamEvent.stage("using_tool")
-                        yield StreamEvent.tool_start(tool_name, message[:100])
+                            if event_type == "on_tool_start":
+                                tool_name = event.get("name", "unknown")
+                                await agent_event_queue.put(StreamEvent.stage("using_tool"))
+                                await agent_event_queue.put(StreamEvent.tool_start(tool_name, message[:100]))
+                                if tool_name == "translate_evm_to_ralph":
+                                    await agent_event_queue.put(StreamEvent.stage("translating", "🔄 Translating to Ralph..."))
 
-                    elif event_type == "on_tool_end":
-                        tool_name = event.get("name", "unknown")
-                        tool_data = event.get("data", {})
-                        tool_output = tool_data.get("output")
-                        
-                        # ✅ Extract string content from ToolMessage
-                        if tool_output:
-                            # ToolMessage has a .content attribute with the actual string
-                            if hasattr(tool_output, 'content'):
-                                output_text = tool_output.content
-                            elif isinstance(tool_output, str):
-                                output_text = tool_output
-                            elif isinstance(tool_output, dict):
-                                output_text = tool_output.get("output", "")
-                            else:
-                                # Fallback: convert to string
-                                output_text = str(tool_output)
-                            
-                            # Now send the string, not the ToolMessage object
-                            if tool_name == "translate_evm_to_ralph" and output_text:
-                                yield StreamEvent.content(output_text)
-                        yield StreamEvent.tool_end(tool_name)
+                            elif event_type == "on_tool_end":
+                                tool_name = event.get("name", "unknown")
+                                tool_data = event.get("data", {})
+                                tool_output = tool_data.get("output")
+                                
+                                # Extract string content from ToolMessage
+                                if tool_output:
+                                    if hasattr(tool_output, 'content'):
+                                        output_text = tool_output.content
+                                    elif isinstance(tool_output, str):
+                                        output_text = tool_output
+                                    elif isinstance(tool_output, dict):
+                                        output_text = tool_output.get("output", "")
+                                    else:
+                                        output_text = str(tool_output)
+                                    
+                                    # For non-translation tools, send the output as content
+                                    if tool_name != "translate_evm_to_ralph" and output_text:
+                                        await agent_event_queue.put(StreamEvent.content(output_text))
+                                await agent_event_queue.put(StreamEvent.tool_end(tool_name))
 
-                    elif event_type == "on_chat_model_stream":
-                        chunk = event.get("data", {}).get("chunk")
-                        if chunk and hasattr(chunk, "content"):
-                            content = chunk.content
-                            if content:
-                                full_response += content
-                                yield StreamEvent.content(content)
+                            elif event_type == "on_chat_model_stream":
+                                chunk = event.get("data", {}).get("chunk")
+                                if chunk and hasattr(chunk, "content"):
+                                    content = chunk.content
+                                    if content:
+                                        full_response += content
+                                        await agent_event_queue.put(StreamEvent.content(content))
 
-                    elif event_type == "on_chain_end":
-                        output = event.get("data", {}).get("output")
-                        if isinstance(output, str):
-                            final_text = output
-                        elif isinstance(output, dict):
-                            final_text = output.get("output", "")
-                        else:
-                            final_text = str(output)
+                            elif event_type == "on_chain_end":
+                                output = event.get("data", {}).get("output")
+                                if isinstance(output, str):
+                                    final_text = output
+                                elif isinstance(output, dict):
+                                    final_text = output.get("output", "")
+                                else:
+                                    final_text = str(output)
 
-                        if final_text:
-                            full_response += final_text
-                            yield StreamEvent.content(final_text)
+                                if final_text:
+                                    full_response += final_text
+                                    await agent_event_queue.put(StreamEvent.content(final_text))
+                    except Exception as e:
+                        logger.error(f"Agent error: {e}", exc_info=True)
+                        await agent_event_queue.put(StreamEvent.error(f"Error: {str(e)}"))
+                    finally:
+                        agent_done = True
+
+                # Start the agent in a background task
+                agent_task = asyncio.create_task(run_agent_and_emit_events())
+
+                # Consume events from both queues - poll thread-safe queue and async queue
+                while not agent_done or not translation_chunk_queue.empty() or not agent_event_queue.empty():
+                    # First, drain all available translation chunks (thread-safe queue)
+                    while True:
+                        try:
+                            chunk_event = translation_chunk_queue.get_nowait()
+                            yield chunk_event
+                        except queue.Empty:
+                            break
+                    
+                    # Then, try to get an agent event with a short timeout
+                    try:
+                        event = await asyncio.wait_for(agent_event_queue.get(), timeout=0.05)
+                        yield event
+                    except asyncio.TimeoutError:
+                        # No agent event available, continue polling
+                        pass
+                
+                # Final drain of any remaining chunks
+                while True:
+                    try:
+                        chunk_event = translation_chunk_queue.get_nowait()
+                        yield chunk_event
+                    except queue.Empty:
+                        break
+
+                # Wait for agent task to complete (should already be done)
+                await agent_task
 
                 # Store message in history
                 self.sessions.setdefault(session_id, [])
@@ -533,6 +613,7 @@ Add buying, cancelation, and fee logic to suit your use case.
             finally:
                 # Clean up session context after execution
                 set_session_options_context(None)
+                set_translation_queue(None)
                 logger.info("Session context cleaned up")
 
         except Exception as e:

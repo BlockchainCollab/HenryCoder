@@ -8,7 +8,8 @@ type AgentChunk =
   | { type: "stage"; data: { stage: string; message: string } }
   | { type: "tool_start"; data: { tool: string; input: string } }
   | { type: "tool_end"; data: { tool: string; success: boolean } }
-  | { type: "content"; data: string };
+  | { type: "content"; data: string }
+  | { type: "translation_chunk"; data: string };
 
 // Helper function to extract Ralph code from content
 function extractRalphCode(content: string): string {
@@ -120,6 +121,12 @@ export async function translateCode({
                   setOutputCode(ralphCode);
                 }
               }
+            }
+            
+            // Handle translation chunks - streamed directly from translator
+            if (chunk.type === "translation_chunk") {
+              console.log("[Translation Chunk]", chunk.data);
+              // TODO: Later we'll stream this to the output panel
             }
             
             // Handle tool execution (for future agentic view)

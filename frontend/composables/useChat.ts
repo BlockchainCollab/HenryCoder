@@ -25,7 +25,7 @@ export interface StageInfo {
 }
 
 export interface StreamEvent {
-  type: 'content' | 'stage' | 'tool_start' | 'tool_end' | 'error';
+  type: 'content' | 'translation_chunk' | 'stage' | 'tool_start' | 'tool_end' | 'error';
   data: any;
 }
 
@@ -66,6 +66,11 @@ export function useChat() {
     switch (event.type) {
       case 'content':
         // Append content to assistant message
+        assistantMessage.content += event.data;
+        break;
+
+      case 'translation_chunk':
+        // Append translation chunk to assistant message (streamed from translator)
         assistantMessage.content += event.data;
         break;
 

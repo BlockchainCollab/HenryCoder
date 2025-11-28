@@ -1,5 +1,62 @@
 <template>
-  <div class="flex flex-col items-center justify-center h-full py-12">
+  <!-- Minimized Mode -->
+  <div
+    v-if="minimized"
+    @click="$emit('toggle-minimize')"
+    class="absolute bottom-4 right-4 flex items-center gap-3 px-4 py-2 rounded-full bg-[#312F2D] border border-[#FF8A00] shadow-[0_0_10px_2px_rgba(239,133,16,0.4)] cursor-pointer hover:shadow-[0_0_14px_3px_rgba(239,133,16,0.6)] transition-all duration-300 z-20"
+    role="button"
+    aria-label="Expand progress indicator"
+  >
+    <!-- Pulsing dot -->
+    <div class="relative">
+      <div class="w-3 h-3 rounded-full bg-[#FF8A00] animate-pulse"></div>
+      <div class="absolute inset-0 w-3 h-3 rounded-full bg-[#FF8A00] animate-ping opacity-75"></div>
+    </div>
+    <!-- Status text -->
+    <span class="text-sm font-medium text-[#E5DED7] truncate max-w-[150px]">
+      {{ currentStageLabel }}
+    </span>
+    <!-- Expand icon -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="h-4 w-4 text-[#FF8A00]"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M5 15l7-7 7 7"
+      />
+    </svg>
+  </div>
+
+  <!-- Expanded Mode -->
+  <div v-else class="flex flex-col items-center justify-center h-full py-12 relative">
+    <!-- Minimize button -->
+    <button
+      @click="$emit('toggle-minimize')"
+      class="absolute top-4 right-4 p-2 rounded-full bg-[#312F2D] border border-[#4C4B4B] hover:border-[#FF8A00] text-[#9E9992] hover:text-[#FF8A00] transition-all duration-200 z-20"
+      aria-label="Minimize progress indicator"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-5 w-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M19 9l-7 7-7-7"
+        />
+      </svg>
+    </button>
+
     <!-- Henry Robot Animation -->
     <div class="mb-8 relative">
       <div class="w-32 h-32 relative animate-bounce-slow">
@@ -152,9 +209,16 @@ import { computed } from "vue";
 
 interface Props {
   statusMessage: string;
+  minimized?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  minimized: false,
+});
+
+defineEmits<{
+  (e: 'toggle-minimize'): void;
+}>();
 
 const stages = [
   { id: "thinking", label: "Thinking", keywords: ["thinking", "analyzing"] },

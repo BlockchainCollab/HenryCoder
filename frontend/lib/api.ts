@@ -4,7 +4,7 @@ export type PreviousTranslation = {
   errors: string[];
 };
 
-type AgentChunk = 
+type AgentChunk =
   | { type: "stage"; data: { stage: string; message: string } }
   | { type: "tool_start"; data: { tool: string; input: string } }
   | { type: "tool_end"; data: { tool: string; success: boolean } }
@@ -14,18 +14,18 @@ type AgentChunk =
 // Helper function to extract Ralph code from content
 function extractRalphCode(content: string): string {
   // Remove "Translated Ralph code:" prefix if present
-  let cleaned = content.replace(/^Translated Ralph code:\s*\n?/i, '');
-  
+  let cleaned = content.replace(/^Translated Ralph code:\s*\n?/i, "");
+
   // Extract code between ```ralph and ```
   const ralphMatch = cleaned.match(/```ralph\s*\n([\s\S]*?)```/);
   if (ralphMatch && ralphMatch[1]) {
     return ralphMatch[1].trim();
   }
-  
+
   // Fallback: try to remove any markdown code blocks
-  cleaned = cleaned.replace(/```ralph\s*\n?/g, '');
-  cleaned = cleaned.replace(/```\s*$/g, '');
-  
+  cleaned = cleaned.replace(/```ralph\s*\n?/g, "");
+  cleaned = cleaned.replace(/```\s*$/g, "");
+
   return cleaned.trim();
 }
 
@@ -47,14 +47,14 @@ export async function translateCode({
   setOutputCode: (val: string) => void;
   setLoadingStatus: (val: string) => void;
   setErrors: (val: string[]) => void;
-  }) {
+}) {
   const sessionId = ref<string>(crypto.randomUUID());
   setOutputCode(initialOutputCode);
   setErrors([]);
   setLoadingStatus("");
-  
-  let accumulatedContent = "";
-  
+
+  let streamedTranslationCode = initialOutputCode;
+
   try {
     const response = await fetch(
       `${runtimeConfig.public.apiBase}/chat/stream`,
@@ -76,92 +76,60 @@ export async function translateCode({
         }),
       }
     );
-    
+
     if (!response.ok || !response.body) {
       const errorData = await response
         .json()
         .catch(() => ({ detail: "Translation failed with non-JSON response" }));
       throw new Error(errorData.detail || "Translation failed");
     }
-    
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let done = false;
     let buffer = "";
     let errorsArr: string[] = [];
-    
+
     while (!done) {
       const { value, done: streamDone } = await reader.read();
       done = streamDone;
-      
+
       if (value) {
         buffer += decoder.decode(value, { stream: true });
         let lines = buffer.split("\n");
         buffer = lines.pop() || "";
-        
+
         for (const line of lines) {
           if (!line.trim()) continue;
-          
+
           try {
             const chunk = JSON.parse(line) as AgentChunk;
-            
+
             // Handle stage updates for progress indicator
             if (chunk.type === "stage") {
               setLoadingStatus(chunk.data.message);
             }
-            
-            // Accumulate content chunks
-            if (chunk.type === "content") {
-              accumulatedContent += chunk.data;
-              
-              // Try to extract and display Ralph code if we have the full code block
-              if (accumulatedContent.includes("```ralph") && accumulatedContent.includes("```\n")) {
-                const ralphCode = extractRalphCode(accumulatedContent);
-                if (ralphCode) {
-                  setOutputCode(ralphCode);
-                }
-              }
-            }
-            
+
             // Handle translation chunks - streamed directly from translator
             if (chunk.type === "translation_chunk") {
-              console.log("[Translation Chunk]", chunk.data);
-              // TODO: Later we'll stream this to the output panel
+              // Stream the translation chunk directly to the output
+              streamedTranslationCode += chunk.data;
+              setOutputCode(streamedTranslationCode);
             }
-            
+
             // Handle tool execution (for future agentic view)
             if (chunk.type === "tool_start") {
               setLoadingStatus(`🔧 Using tool: ${chunk.data.tool}`);
             }
-            
           } catch (e) {
             // Ignore JSON parse errors for incomplete lines
           }
         }
       }
     }
-    
-    // Handle any remaining buffered line
-    if (buffer.trim()) {
-      try {
-        const chunk = JSON.parse(buffer) as AgentChunk;
-        if (chunk.type === "content") {
-          accumulatedContent += chunk.data;
-        }
-      } catch (e) {
-        // Ignore
-      }
-    }
-    
-    // Final extraction of Ralph code
-    const finalRalphCode = extractRalphCode(accumulatedContent);
-    if (finalRalphCode) {
-      setOutputCode(finalRalphCode);
-    }
-    
+
     setLoadingStatus("✅ Translation complete");
     setErrors(errorsArr);
-    
   } catch (e: any) {
     console.error("Translation error:", e);
     const errorMessage = e instanceof Error ? e.message : String(e);
@@ -213,7 +181,9 @@ export async function compileTranslatedCode({
         }
 
         if (
-          errorMsg.includes("Code generation is not supported for abstract contract")
+          errorMsg.includes(
+            "Code generation is not supported for abstract contract"
+          )
         ) {
           onSuccess(
             "No syntax errors, but code generation is not supported for abstract contracts - please try locally"

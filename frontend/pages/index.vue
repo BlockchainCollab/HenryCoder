@@ -161,7 +161,7 @@
           >
             <div
               v-if="consentOpen"
-              class="absolute -translate-y-[100%] -top-[16px] p-3 pl-6 flex gap-x-[10px] bg-[#2A231A] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)]"
+              class="absolute -translate-y-[100%] -top-[16px] p-3 pl-6 w-full flex items-center justify-between gap-x-[10px] bg-[#2A231A] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)]"
             >
               <p
                 class="text-[#EF8510] text-[length:16px] font-semibold leading-6"
@@ -386,18 +386,30 @@
           class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
           <div className="relative flex-1 flex flex-col overflow-hidden">
+            <!-- Transparent progress overlay (expanded) -->
+            <div
+              v-if="loading && !progressMinimized"
+              class="absolute inset-0 bg-[#242322]/40 backdrop-blur-[2px] z-10"
+            >
+              <TranslationProgress
+                :status-message="loadingStatus"
+                :minimized="false"
+                @toggle-minimize="progressMinimized = true"
+              />
+            </div>
+            <!-- Minimized progress badge -->
+            <TranslationProgress
+              v-if="loading && progressMinimized"
+              :status-message="loadingStatus"
+              :minimized="true"
+              @toggle-minimize="progressMinimized = false"
+            />
             <div
               ref="outputContainer"
               class="flex-1 overflow-auto custom-scrollbar"
             >
-              <CodeViewerWithAnnotations
-                v-if="outputCode && !loading"
-                :code="outputCode"
-              />
-              <TranslationProgress
-                v-if="loading"
-                :status-message="loadingStatus"
-              />
+              <!-- Show streaming code output during loading -->
+              <CodeViewerWithAnnotations v-if="outputCode" :code="outputCode" :loading="loading" />
               <div
                 v-if="!outputCode && !loading && !errors.length"
                 class="text-gray-500 text-[length:18px] font-menlo"
@@ -635,6 +647,7 @@ const copied = ref(false);
 const isScrolled = ref(false);
 const consentOpen = ref(true);
 const errorsOpen = ref(true);
+const progressMinimized = ref(false);
 const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 const outputContainer = ref<HTMLElement | null>(null);
 
@@ -738,6 +751,7 @@ const translateCodeInner = async (
   errors.value = [];
   errorsOpen.value = true;
   successMessage.value = null;
+  progressMinimized.value = false;
   await apiTranslateCode({
     sourceCode: sourceCode.value,
     options: options.value,

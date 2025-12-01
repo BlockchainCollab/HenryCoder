@@ -242,7 +242,6 @@ class ChatAgent:
             """
             try:
                 logger.warning(f"Resolving imports for code of length: {len(code)}")
-
                 if "import" not in code:
                     logger.warning("No imports detected in code")
                     return "✓ No imports detected. Code is ready for translation."
@@ -261,7 +260,6 @@ class ChatAgent:
 
                 # Replace imports with their implementations
                 replacement_text = replace_imports(imports)
-
                 # Remove import lines from code
                 code_lines = code.split("\n")
                 code_without_imports = "\n".join([line for line in code_lines if not line.strip().startswith("import ")])
@@ -297,7 +295,6 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
             """
             try:
                 logger.warning(f"Starting translation for code of length: {len(code)}")
-
                 # Safety fallback: check if imports are still present
                 if "import" in code and ("@openzeppelin" in code.lower() or ".sol" in code):
                     logger.warning("⚠️ Code contains imports but wasn't preprocessed! Preprocessing now...")

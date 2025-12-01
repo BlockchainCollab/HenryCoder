@@ -385,7 +385,7 @@
         <div
           class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
-          <div className="relative flex-1 flex flex-col overflow-hidden">
+          <div class="relative flex-1 flex flex-col overflow-hidden">
             <!-- Transparent progress overlay (expanded) -->
             <div
               v-if="loading && !progressMinimized"

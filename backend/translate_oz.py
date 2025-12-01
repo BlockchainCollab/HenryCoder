@@ -53,6 +53,10 @@ def replace_imports(imports: list[str]) -> str:
     """
     replacement_texts = []
     for imp in imports:
+        # Normalize relative imports to absolute paths
+        # e.g., "./@openzeppelin/contracts/access/Ownable.sol" -> "@openzeppelin/contracts/access/Ownable.sol"
+        if "@openzeppelin/contracts" in imp and not imp.startswith("@openzeppelin/contracts"):
+            imp = "@openzeppelin/contracts" + imp.split("@openzeppelin/contracts")[1]
         ignored = IGNORED_IMPORTS.get(imp)
         if ignored:
             replacement_texts.append(ignored)

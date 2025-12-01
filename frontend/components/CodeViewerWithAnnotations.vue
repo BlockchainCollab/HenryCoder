@@ -73,9 +73,13 @@ const codeLines = computed(() => {
 
 // Highlight each line individually
 const highlightedLines = computed(() => {
-  return codeLines.value.map((line) => {
+  return codeLines.value.flatMap((line, index) => {
     if (!line.trim()) {
       return "&nbsp;"; // Preserve empty lines
+    }
+    if (line.includes("```")) {
+      // Handle code block delimiters
+      return [];
     }
     try {
       // Replace leading spaces with non-breaking spaces to preserve indentation

@@ -99,6 +99,8 @@ async def perform_translation(
     previous = translate_request.previous_translation
     model = SMART_LLM_MODEL if translate_request.options.smart else LLM_MODEL
 
+    resolved_imports,code = source_code.split("/* IMPORTS_START */")[1].split("/* IMPORTS_END */")
+
     print(
         LOG_TEMPLATE.format(
             optimize=optimize,
@@ -116,13 +118,14 @@ async def perform_translation(
         include_comments=include_comments,
         mimic_defaults=mimic_defaults,
         translate_erc20=translate_erc20,
-        source_code=source_code,
+        source_code=code,
     )
 
     # Build system prompt with options
     system_prompt = build_translation_system_prompt()
+    imports_prompt = f"// INCLUDED PRE-TRANSLATED LIBRARIES: \n{resolved_imports}\n\n"
 
-    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+    messages = [{"role": "system", "content": system_prompt},{"role": "assistant", "content": imports_prompt}, {"role": "user", "content": user_prompt}]
 
     if previous:
         messages.append({"role": "assistant", "content": previous.source_code})
@@ -143,6 +146,9 @@ async def perform_translation(
             base_url=API_URL.replace("/chat/completions", "")
         ) as client:
             if stream:
+                if resolved_imports:
+                    yield resolved_imports + "\n", "", warnings, errors
+                
                 response = await client.chat.completions.create(**common_parameters, stream=True)
                 async for chunk in response:
                     content = getattr(chunk.choices[0].delta, "content", "")

@@ -263,7 +263,7 @@ class ChatAgent:
                 # Remove import lines from code
                 code_lines = code.split("\n")
                 code_without_imports = "\n".join([line for line in code_lines if not line.strip().startswith("import ")])
-                preprocessed_code = f"{replacement_text}\n\n{code_without_imports}"
+                preprocessed_code = f"/* IMPORTS_START */\n{replacement_text}\n/* IMPORTS_END */\n\n{code_without_imports}"
 
                 logger.warning(f"Imports resolved. New code length: {len(preprocessed_code)}")
 
@@ -293,6 +293,7 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
 
             IMPORTANT: If the code contains 'import' statements, use resolve_solidity_imports FIRST.
             """
+
             try:
                 logger.warning(f"Starting translation for code of length: {len(code)}")
                 # Safety fallback: check if imports are still present

@@ -7,11 +7,25 @@ logger = logging.getLogger(__name__)
 
 # Dict of OpenZeppelin imports to be ignored during translation, mapped to their replacement comments.
 IGNORED_IMPORTS: dict[str, str] = {
-    "@openzeppelin/contracts/utils/Context.sol": "// Context is excluded as Ralph has a different convention for each msg data fetch.",
-    "@openzeppelin/contracts/utils/Multicall.sol": "// Multicall contract is omitted as Ralph can deal with multiple calls via TX Scripts and chained calls.",
-    "@openzeppelin/contracts/utils/ReentrancyGuard.sol": "// ReentrancyGuard contract is omitted as Alephium VM blocks reentrancy on protocol level.",
-    "@openzeppelin/contracts/utils/introspection/ERC165.sol": "// ERC165 contract is omitted because Ralph can't perform low level calls.",
-    "@openzeppelin/contracts/utils/introspection/IERC165.sol": "// IERC165 interface is omitted because Ralph can't perform low level calls.",
+    "@openzeppelin/contracts/utils/Context.sol": "// @@@ Ralph uses built-in functions to fetch transaction data.",
+    "@openzeppelin/contracts/utils/Multicall.sol": "// @@@ Ralph deals with multiple calls via TX Scripts and chained calls.",
+    "@openzeppelin/contracts/utils/ReentrancyGuard.sol": "// @@@ Alephium VM blocks reentrancy on protocol level.",
+    "@openzeppelin/contracts/utils/introspection/ERC165.sol": "// @@@ Ralph can't perform low level calls.",
+    "@openzeppelin/contracts/utils/introspection/IERC165.sol": "// @@@ Ralph can't perform low level calls.",
+    # ERC20 Extensions wchich are not applicable in Ralph's native token model
+    "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol": "// @@@ Ralph uses per-transaction approvals via brace syntax {owner -> tokenId: amount}, eliminating the need for signature-based approvals.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol": "// @@@ Ralph uses per-transaction approvals via brace syntax, making gasless approval signatures unnecessary.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol": "// @@@ Ralph's UTXO model stores balances in UTXOs, not contract storage, making historical balance/voting power tracking impossible.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC20Wrapper.sol": "// @@@ Alephium tokens are native UTXOs and cannot be wrapped in the ERC20 sense. Use vault/escrow patterns instead.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC20FlashMint.sol": "// @@@ Ralph cannot mint and burn tokens atomically within a single transaction.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol": "// @@@ ERC4626 (Tokenized Vault) is omitted because it requires contract-managed balances. Ralph's native tokens are UTXOs, not contract storage.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC1363.sol": "// @@@ Ralph token transfers are native operations without callback mechanisms.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC20Crosschain.sol": "// @@@ Alephium has native cross-group sharding. Bridging requires Alephium-specific implementation.",
+    "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Bridgeable.sol": "// @@@ Alephium has native cross-group sharding. Bridging requires Alephium-specific implementation.",
+    "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20TemporaryApproval.sol": "// @@@ Ralph approvals are already temporary by design - per-transaction via brace syntax.",
+    "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": "// @@@ Ralph's IFungibleToken interface already includes getSymbol(), getName(), getDecimals(), and getTotalSupply() out of the box.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol": "// @@@ Alephium doesn't allow pausing token transfers; transfers occur at the native layer.",
+    "@openzeppelin/contracts/token/ERC20/extensions/ERC20Capped.sol": "// @@@ Contract deployer creates a fixed supply in the contract UTXO at deployment, so ERC20Capped behavior is represented by the deployment UTXO rather than runtime cap checks.",
 }
 
 
@@ -54,14 +68,18 @@ def replace_imports(imports: list[str]) -> str:
     replacement_texts = []
     for imp in imports:
         # Normalize relative imports to absolute paths
-        # e.g., "./@openzeppelin/contracts/access/Ownable.sol" -> "@openzeppelin/contracts/access/Ownable.sol"
-        if "@openzeppelin/contracts" in imp and not imp.startswith("@openzeppelin/contracts"):
-            imp = "@openzeppelin/contracts" + imp.split("@openzeppelin/contracts")[1]
-        ignored = IGNORED_IMPORTS.get(imp)
-        if ignored:
+        if ("openzeppelin" in imp) and not imp.startswith("@openzeppelin"):
+            imp = "@openzeppelin/" + imp.split("openzeppelin/")[1]
+
+        # If the path is ignored we will provide a short information in this format:
+        #   // @@@ Ralph handles X in a different manner than solidity
+        #   // [name.sol] is omitted
+        if ignored := IGNORED_IMPORTS.get(imp):
+            sol_name = imp.split("/")[-1]
+            ignored += f"\n// {sol_name} is omitted"
             replacement_texts.append(ignored)
-        elif imp in REPLACEMENT_LIBS:
-            replacement_texts.append(REPLACEMENT_LIBS[imp])
+        elif replacementLib := REPLACEMENT_LIBS.get(imp):
+            replacement_texts.append(replacementLib)
         else:
             replacement_texts.append(f"// {imp} is not available")
     return "\n\n".join(replacement_texts)

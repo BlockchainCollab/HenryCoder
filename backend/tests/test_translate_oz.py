@@ -69,9 +69,9 @@ class TestReplacementLibs:
 @pytest.mark.parametrize(
     "imports,expected_contains",
     [
-        (["@openzeppelin/contracts/utils/Context.sol"], ["// Context is excluded"]),
-        (["@openzeppelin/contracts/utils/ReentrancyGuard.sol"], ["// ReentrancyGuard contract is omitted"]),
-        (["@openzeppelin/contracts/utils/Multicall.sol"], ["// Multicall contract is omitted"]),
+        (["@openzeppelin/contracts/utils/Context.sol"], ["// Context.sol is omitted"]),
+        (["@openzeppelin/contracts/utils/ReentrancyGuard.sol"], ["// ReentrancyGuard.sol is omitted"]),
+        (["@openzeppelin/contracts/utils/Multicall.sol"], ["// Multicall.sol is omitted"]),
         (["unknown/path/to/contract.sol"], ["// unknown/path/to/contract.sol is not available"]),
     ],
 )
@@ -93,8 +93,8 @@ def test_replace_imports_multiple_imports():
     result = replace_imports(imports)
 
     # Should contain comments for all three
-    assert "// Context is excluded" in result
-    assert "// ReentrancyGuard contract is omitted" in result
+    assert "// Context.sol is omitted" in result
+    assert "// ReentrancyGuard.sol is omitted" in result
     assert "// unknown/contract.sol is not available" in result
 
     # Should be separated by double newline

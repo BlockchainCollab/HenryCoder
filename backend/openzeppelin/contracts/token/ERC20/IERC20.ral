@@ -1,0 +1,20 @@
+// @@@ The import contains IFungibleToken which replaces IERC20
+import "std/fungible_token_interface"
+
+struct FungibleTokenMetadata {
+  mut symbol: ByteVec,
+  mut name: ByteVec,
+  mut decimals: U256,
+  mut totalSupply: U256
+}
+
+// Ralph replaces IERC20 with IFungibleToken
+// Interface IFungibleToken {
+//   pub fn getSymbol() -> ByteVec
+//
+//   pub fn getName() -> ByteVec
+//
+//   pub fn getDecimals() -> U256
+//
+//   pub fn getTotalSupply() -> U256
+// }

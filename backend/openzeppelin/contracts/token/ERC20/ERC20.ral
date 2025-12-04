@@ -1,0 +1,120 @@
+// Ralph Translation of ERC20
+// ===========================
+// 
+// In Alephium/Ralph, tokens are NATIVE to the blockchain. Unlike Ethereum where
+// ERC20 tokens require a contract to manage balances and transfers, Alephium's
+// stateful UTXO model handles tokens at the protocol level.
+//
+// Key differences:
+// 1. Token balances are stored in UTXOs, not contract storage
+// 2. Transfers are done via native transfer functions, not contract calls
+// 3. Approvals are per-transaction using brace syntax {caller -> tokenId: amount}
+// 4. No need for allowance mappings - approvals happen at transaction time
+//
+// This file demonstrates how each ERC20 function maps to Ralph concepts.
+
+import "std/fungible_token_interface"
+
+// =============================================================================
+// ERC20 EVENTS
+// =============================================================================
+
+// event Transfer(...)
+// event Approval(...)
+// 
+// ERC20 EVENTS ARE NOT NEEDED IN RALPH:
+// In Ralph, token transfers are native blockchain operations and emit native events.
+
+
+Abstract Contract FungibleToken (
+  mut tokenMetadata: FungibleTokenMetadata
+) implements IFungibleToken {
+
+  // =========================================================================
+  // SUPPORTED FUNCTIONS (IFungibleToken interface)
+  // =========================================================================
+
+  // SUPPORTED - Part of IFungibleToken interface
+  // Returns the total supply of tokens.
+  pub fn getTotalSupply() -> U256 {
+    return tokenMetadata.totalSupply
+  }
+
+  @using(assetsInContract = true)
+  pub fn getMaxSupply() -> U256 {
+    return tokenMetadata.totalSupply + tokenRemaining!(selfAddress!(), selfTokenId!())
+  }
+
+  // Additional metadata functions from IFungibleToken:
+  
+  pub fn getSymbol() -> ByteVec {
+    return tokenMetadata.symbol
+  }
+
+  pub fn getName() -> ByteVec {
+    return tokenMetadata.name
+  }
+
+  pub fn getDecimals() -> U256 {
+    return tokenMetadata.decimals
+  }
+
+  // @@@ In Ralph all token minting is capped by the initial UTXO issuance.
+  @using(assetsInContract = true)
+  fn innerMint(to: Address, amount: U256) -> () {
+    transferTokenFromSelf!(to, selfTokenId!(), amount)
+    tokenMetadata.totalSupply = tokenMetadata.totalSupply + amount
+  }
+
+  // @@@ Burn tokens in ERC20 sense - they can be reissued later
+  @using(preapprovedAssets = true)
+  fn innerBurn(from: Address, amount: U256) -> () {
+    transferTokenToSelf!(from, selfTokenId!(), amount)
+    tokenMetadata.totalSupply = tokenMetadata.totalSupply - amount
+  }
+
+  // =========================================================================
+  // NOT SUPPORTED / NOT NEEDED FUNCTIONS
+  // =========================================================================
+
+  // @@@ In Ralph, token balances are stored in UTXOs, not in contract storage. Balances are queried via the Alephium REST API or SDK, not contract calls.
+  // UNSUPPORTED: function balanceOf(address account) external view returns (uint256)
+  //
+  // Instead, you can use:
+  //   tokenRemaining!(address, tokenId) 
+  // But this only works for assets that are part of the current transaction.
+
+  // @@@ Native token transfers in Ralph are done using built-in functions. The caller just sends tokens as part of the transaction.
+  // UNSUPPORTED: function transfer(address to, uint256 value) external returns (bool)
+  // Caveat: account/contract to contract transfers require a contract call to receiving contract. Assets cannot be deposited without consent of the receiving contract.
+
+  // @@@ Ralph does not have persistent allowances. Instead, approvals are per-transaction using the brace syntax: contract.function{owner -> tokenId: amount}(params)
+  // UNSUPPORTED: function allowance(address owner, address spender) external view returns (uint256)
+  
+  // @@@  Ralph uses per-transaction approvals. When calling a function that needs to spend your tokens, you approve in the same call using brace syntax.
+  // UNSUPPORTED: function approve(address spender, uint256 value) external returns (bool)
+
+  // @@@ In Ralph, token transfers are native operations. The "from" address must be part of the transaction (signing or approving assets).
+  // UNSUPPORTED: function transferFrom(address from, address to, uint256 value) external returns (bool)
+}
+
+// =============================================================================
+// SUMMARY: ERC20 vs Ralph Native Tokens
+// =============================================================================
+//
+// | ERC20 Function   | Ralph Equivalent                              | Supported |
+// |------------------|-----------------------------------------------|-----------|
+// | totalSupply()    | getTotalSupply() via IFungibleToken           | ✅ Yes    |
+// | balanceOf()      | REST API / tokenRemaining!() in tx            | ❌ No     |
+// | transfer()       | transferToken!() / transferTokenFromSelf!()   | ❇️ Native |
+// | allowance()      | N/A - per-transaction approvals               | ❌ No     |
+// | approve()        | Brace syntax {addr -> token: amt}             | ❌ No     |
+// | transferFrom()   | transferToken!() with preapprovedAssets       | ❇️ Native |
+// | Transfer event   | Native blockchain tracking                    | ❌ No     |
+// | Approval event   | N/A - no persistent approvals                 | ❌ No     |
+//
+// Key Takeaways:
+// 1. Tokens are first-class citizens in Alephium - transfers are native and UTXO based
+// 2. Approvals are atomic and per-transaction - much safer than ERC20 pattern
+// 3. Coins are in UTXOs, queried via API, not contract storage
+// 4. Transfer events are redundant - blockchain natively tracks all movements and emits native events

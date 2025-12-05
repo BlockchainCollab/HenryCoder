@@ -13,8 +13,6 @@
 //
 // This file demonstrates how each ERC20 function maps to Ralph concepts.
 
-import "std/fungible_token_interface"
-
 // =============================================================================
 // ERC20 EVENTS
 // =============================================================================

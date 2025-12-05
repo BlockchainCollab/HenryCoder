@@ -48,8 +48,9 @@ def build_translation_system_prompt() -> str:
         "3. For Solidity contracts: Provide complete, working Ralph contract implementations\n"
         "4. Include only business logic comments, NOT syntax explanation comments\n"
         "5. Use proper Ralph annotations (@using) where needed\n"
-        "6. Handle errors with assert! and proper error codes\n\n"
-        "7. Every translated function must include an additional comment explaining the differences in behavior between Solidity and Ralph, if any. These comments must be one line long and start with '@@@'.\n"
+        "6. Handle errors with assert! and proper error codes\n"
+        "7. Do not include code from PRE-TRANSLATED LIBRARIES in your output. They are already included separately.\n\n"
+        "8. Every translated function must include an additional comment explaining the differences in behavior between Solidity and Ralph, if any. These comments must be one line long and start with '@@@'.\n"
         "   Example: @@@ Solidity allows implicit type conversion, Ralph requires explicit casting.\n\n"
         "AVOID:\n"
         # "- Comments like 'Ralph doesn't have X, so we use Y'\n"
@@ -125,7 +126,11 @@ async def perform_translation(
     system_prompt = build_translation_system_prompt()
     imports_prompt = f"// INCLUDED PRE-TRANSLATED LIBRARIES: \n{resolved_imports}\n\n"
 
-    messages = [{"role": "system", "content": system_prompt},{"role": "assistant", "content": imports_prompt}, {"role": "user", "content": user_prompt}]
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "assistant", "content": imports_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
 
     if previous:
         messages.append({"role": "assistant", "content": previous.source_code})

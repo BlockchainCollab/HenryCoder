@@ -65,7 +65,9 @@ def replace_imports(imports: list[str]) -> str:
     If an import is in REPLACEMENT_LIBS, its loaded content is used.
     Otherwise, "// [IMPORT_PATH] is not available" is used
     """
-    replacement_texts = []
+    # dict to deduplicate imports and cover special cases
+    replacements: dict[str, str] = {}
+    
     for imp in imports:
         # Normalize relative imports to absolute paths
         if ("openzeppelin" in imp) and not imp.startswith("@openzeppelin"):
@@ -77,9 +79,17 @@ def replace_imports(imports: list[str]) -> str:
         if ignored := IGNORED_IMPORTS.get(imp):
             sol_name = imp.split("/")[-1]
             ignored += f"\n// {sol_name} is omitted"
-            replacement_texts.append(ignored)
+            replacements[imp] = ignored
         elif replacementLib := REPLACEMENT_LIBS.get(imp):
-            replacement_texts.append(replacementLib)
+            replacements[imp] = replacementLib
         else:
-            replacement_texts.append(f"// {imp} is not available")
-    return "\n\n".join(replacement_texts)
+            replacements[imp] = f"// {imp} is not available"
+
+    # special replacement cases
+    # if ERC20 is imported we need to also include IERC20 translation
+    if "@openzeppelin/contracts/token/ERC20/ERC20.sol" in replacements:
+        replacements["@openzeppelin/contracts/token/ERC20/IERC20.sol"] = REPLACEMENT_LIBS.get(
+            "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+            "// @openzeppelin/contracts/token/ERC20/IERC20.sol is not available"
+        )
+    return "\n\n".join(replacements.values())

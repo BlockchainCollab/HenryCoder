@@ -100,7 +100,11 @@ async def perform_translation(
     previous = translate_request.previous_translation
     model = SMART_LLM_MODEL if translate_request.options.smart else LLM_MODEL
 
-    resolved_imports,code = source_code.split("/* IMPORTS_START */")[1].split("/* IMPORTS_END */")
+    # Check for import markers and split if they exist
+    resolved_imports = ""
+    code = source_code
+    if "/* IMPORTS_START */" in source_code and "/* IMPORTS_END */" in source_code:
+        resolved_imports, code = source_code.split("/* IMPORTS_START */")[1].split("/* IMPORTS_END */")
 
     print(
         LOG_TEMPLATE.format(

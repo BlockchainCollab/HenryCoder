@@ -1,0 +1,23 @@
+// Ralph Translation of ERC721Burnable
+// =====================================
+// @@@ NFT burning destroys the sub-contract and relevant token permanently.
+Abstract Contract NFTCollectionBurnable() {
+  // =========================================================================
+  // burn(uint256 tokenId)
+  // =========================================================================
+  // Burns an NFT by destroying its sub-contract.
+  //
+  // In Ralph, each NFT is a sub-contract. Burning means:
+  // 1. The caller must own the NFT (hold its token)
+  // 2. The token is permanently removed from circulation
+  //
+  // Usage:
+  //   nftCollection.burn{owner -> nftContractId: 1}(refundAddress, owner, nftContractId)
+  //
+  // Alternative: Collection-level burn with ownership check
+  // @@@ Due to the approval system in Ralph, burn requires two additional parameters to be passed along with approval
+  @using(preapprovedAssets = true, checkExternalCaller = false)
+  pub fn burn(refundAddress: Address, tokenOwner: Address, nftToBurn: NFT) -> () {
+    nftToBurn.burn{tokenOwner -> tokenId!(nftToBurn): 1}(refundAddress, tokenOwner)
+  }
+}

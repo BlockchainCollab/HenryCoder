@@ -296,20 +296,20 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
             try:
                 logger.warning(f"Starting translation for code of length: {len(code)}")
                 # Safety fallback: check if imports are still present
-                if "import" in code and ("@openzeppelin" in code.lower() or ".sol" in code):
-                    logger.warning("⚠️ Code contains imports but wasn't preprocessed! Preprocessing now...")
-                    from translate_oz import replace_imports
+                # if "import" in code and ("@openzeppelin" in code.lower() or ".sol" in code):
+                #     logger.warning("⚠️ Code contains imports but wasn't preprocessed! Preprocessing now...")
+                #     from translate_oz import replace_imports
 
-                    imports = [parse_import_line(line) for line in code.split("\n")]
-                    imports = [imp for imp in imports if imp]
+                #     imports = [parse_import_line(line) for line in code.split("\n")]
+                #     imports = [imp for imp in imports if imp]
 
-                    if imports:
-                        logger.warning(f"Fallback preprocessing: Found {len(imports)} import(s)")
-                        replacement_text = replace_imports(imports)
-                        code_lines = code.split("\n")
-                        code = "\n".join([line for line in code_lines if not line.strip().startswith("import ")])
-                        code = f"{replacement_text}\n\n{code}"
-                        logger.warning("Fallback preprocessing completed")
+                #     if imports:
+                #         logger.warning(f"Fallback preprocessing: Found {len(imports)} import(s)")
+                #         replacement_text = replace_imports(imports)
+                #         code_lines = code.split("\n")
+                #         code = "\n".join([line for line in code_lines if not line.strip().startswith("import ")])
+                #         code = f"{replacement_text}\n\n{code}"
+                #         logger.warning("Fallback preprocessing completed")
 
                 # Get options from session context
                 session_opts = get_current_session_options()

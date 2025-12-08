@@ -1,0 +1,38 @@
+// Ralph Translation of IERC721
+// =============================
+
+struct NFTMetadata {
+  mut tokenUri: ByteVec,
+  mut collectionId: ByteVec,
+  mut nftIndex: U256
+}
+
+struct NFTCollectionMetadata {
+  mut collectionUri: ByteVec,
+  mut name: ByteVec,
+  mut symbol: ByteVec,
+  mut totalSupply: U256
+}
+
+// Ralph replaces IERC721 with INFT and INFTCollection interfaces.
+// These are automatically available thanks to the import statements above.
+//
+// Interface INFT {
+//   pub fn getTokenUri() -> ByteVec
+//   pub fn getNFTIndex() -> U256
+//   pub fn getCollectionIndex() -> (ByteVec, U256)
+// }
+//
+// Interface INFTCollection {
+//   pub fn getCollectionUri() -> ByteVec
+//   pub fn totalSupply() -> U256
+//   pub fn nftByIndex(index: U256) -> INFT
+// }
+//
+// =============================================================================
+// IERC721 EVENTS MAPPING
+// =============================================================================
+//
+// UNSUPPORTED: event Transfer(from, to, tokenId) -> NFTs are sub-contracts, ownership is tracked via subContractId!()
+// UNSUPPORTED: event Approval(owner, approved, tokenId) -> Not needed, per-transaction approvals via brace syntax
+// UNSUPPORTED: event ApprovalForAll(owner, operator, approved) -> Not applicable in Ralph's model

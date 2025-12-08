@@ -1,8 +1,5 @@
-// Ralph Translation of ERC20
+// Ralph Translation of IERC20
 // ===========================
-
-// @@@ The import contains IFungibleToken which replaces IERC20
-import "std/fungible_token_interface"
 
 // @@@ Metadata structure for Fungible Token
 struct FungibleTokenMetadata {

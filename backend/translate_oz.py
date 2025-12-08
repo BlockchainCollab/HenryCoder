@@ -26,6 +26,18 @@ IGNORED_IMPORTS: dict[str, str] = {
     "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": "// @@@ Ralph's IFungibleToken interface already includes getSymbol(), getName(), getDecimals(), and getTotalSupply() out of the box.",
     "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol": "// @@@ Alephium doesn't allow pausing token transfers; transfers occur at the native layer.",
     "@openzeppelin/contracts/token/ERC20/extensions/ERC20Capped.sol": "// @@@ Contract deployer creates a fixed supply in the contract UTXO at deployment, so ERC20Capped behavior is represented by the deployment UTXO rather than runtime cap checks.",
+    # ERC721 Extensions which are not applicable or have limited applicability in Ralph's NFT model
+    "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol": "// @@@ Ralph token transfers are native UTXO operations without callback mechanisms. No receiver interface needed.",
+    "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol": "// @@@ Alephium doesn't allow pausing native token transfers; NFT transfers occur at the UTXO layer.",
+    "@openzeppelin/contracts/token/ERC721/extensions/ERC721Votes.sol": "// @@@ Ralph's UTXO model stores NFT ownership in UTXOs, not contract storage, making historical voting power tracking impossible.",
+    "@openzeppelin/contracts/token/ERC721/extensions/ERC721Wrapper.sol": "// @@@ Alephium NFTs are native sub-contracts and cannot be wrapped in the ERC721 sense. Use vault/escrow patterns instead.",
+    "@openzeppelin/contracts/token/ERC721/extensions/ERC721Consecutive.sol": "// @@@ Ralph's sub-contract model already uses consecutive indices. Batch minting creates multiple sub-contracts requiring ALPH deposits.",
+    "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol": "// @@@ Ralph's INFTCollection interface already provides totalSupply() and nftByIndex(). Owner-level enumeration (tokenOfOwnerByIndex) requires off-chain indexing.",
+    "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol": "// @@@ Ralph's INFTCollection interface provides totalSupply() and nftByIndex(). Owner-level enumeration requires off-chain indexing.",
+    "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol": "// @@@ Ralph's INFT interface includes getTokenUri(). Collection name/symbol are stored on the collection contract.",
+    "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol": "// @@@ Ralph's NFT sub-contracts store tokenUri directly. This is supported out of the box via NFTCollectionBase and INFT.getTokenUri().",
+    "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol": "// @@@ Ralph contracts receive tokens explicitly via functions with assetsInContract annotation, not receiver callbacks.",
+    "@openzeppelin/contracts/token/ERC721/utils/ERC721Utils.sol": "// @@@ Ralph's native token model doesn't use receiver callbacks. Transfers are atomic UTXO operations.",
 }
 
 
@@ -85,6 +97,8 @@ def replace_imports(imports: list[str]) -> str:
         else:
             replacements[imp] = f"// {imp} is not available"
 
+
+    prepended_std_imports = ""
     # special replacement cases
     # if ERC20 is imported we need to also include IERC20 translation
     if "@openzeppelin/contracts/token/ERC20/ERC20.sol" in replacements:
@@ -92,4 +106,15 @@ def replace_imports(imports: list[str]) -> str:
             "@openzeppelin/contracts/token/ERC20/IERC20.sol",
             "// @openzeppelin/contracts/token/ERC20/IERC20.sol is not available"
         )
-    return "\n\n".join(replacements.values())
+        prepended_std_imports += 'import "std/fungible_token_interface"\n'
+    # if ERC721 is imported we need to also include IERC721 translation
+    if "@openzeppelin/contracts/token/ERC721/ERC721.sol" in replacements:
+        replacements["@openzeppelin/contracts/token/ERC721/IERC721.sol"] = REPLACEMENT_LIBS.get(
+            "@openzeppelin/contracts/token/ERC721/IERC721.sol",
+            "// @openzeppelin/contracts/token/ERC721/IERC721.sol is not available"
+        )
+        prepended_std_imports += (
+            'import "std/nft_interface"\n'
+            'import "std/nft_collection_interface"\n'
+        )
+    return prepended_std_imports + "\n\n".join(replacements.values())

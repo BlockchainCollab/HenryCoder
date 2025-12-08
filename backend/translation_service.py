@@ -104,7 +104,7 @@ async def perform_translation(
     resolved_imports = ""
     code = source_code
     if "/* IMPORTS_START */" in source_code and "/* IMPORTS_END */" in source_code:
-        resolved_imports, code = source_code.split("/* IMPORTS_START */")[1].split("/* IMPORTS_END */")
+        resolved_imports, code = source_code.split("/* IMPORTS_START */\n")[1].split("/* IMPORTS_END */")
 
     print(
         LOG_TEMPLATE.format(

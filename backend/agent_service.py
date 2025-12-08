@@ -40,7 +40,6 @@ if not logger.handlers:
 
 API_KEY = os.getenv("API_KEY")
 API_URL = os.getenv("API_URL")
-LLM_MODEL = os.getenv("LLM_MODEL", "mistralai/mistral-small-3.2-24b-instruct")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "mistralai/mistral-small-3.2-24b-instruct")
 
 

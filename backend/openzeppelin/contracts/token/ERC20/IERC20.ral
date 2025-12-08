@@ -1,6 +1,10 @@
+// Ralph Translation of ERC20
+// ===========================
+
 // @@@ The import contains IFungibleToken which replaces IERC20
 import "std/fungible_token_interface"
 
+// @@@ Metadata structure for Fungible Token
 struct FungibleTokenMetadata {
   mut symbol: ByteVec,
   mut name: ByteVec,
@@ -8,7 +12,7 @@ struct FungibleTokenMetadata {
   mut totalSupply: U256
 }
 
-// Ralph replaces IERC20 with IFungibleToken
+// Ralph replaces IERC20 with IFungibleToken, this is automatically available thanks to the import statement above
 // Interface IFungibleToken {
 //   pub fn getSymbol() -> ByteVec
 //
@@ -18,3 +22,4 @@ struct FungibleTokenMetadata {
 //
 //   pub fn getTotalSupply() -> U256
 // }
+

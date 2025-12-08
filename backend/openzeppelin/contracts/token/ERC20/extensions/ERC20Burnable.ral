@@ -1,6 +1,5 @@
 // Ralph Translation of ERC20Burnable
 // ====================================
-//
 // @@@ In Ralph, native burnToken!() permanently removes tokens from circulation. To match ERC20 semantics where burned tokens can be re-minted, the contract simply accepts the deposit and recudes totalSupply.
 Abstract Contract FungibleTokenBurnable(mut tokenMetadata: FungibleTokenMetadata) {
 

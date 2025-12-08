@@ -128,7 +128,7 @@ async def perform_translation(
 
     # Build system prompt with options
     system_prompt = build_translation_system_prompt()
-    imports_prompt = f"// INCLUDED PRE-TRANSLATED LIBRARIES: \n{resolved_imports}\n\n"
+    imports_prompt = f"// INCLUDED PRE-TRANSLATED LIBRARIES: \n{resolved_imports}\n\n// END OF INCLUDED PRE-TRANSLATED LIBRARIES - this code is freely available in the global scope, do not duplicate it\n"
 
     messages = [
         {"role": "system", "content": system_prompt},

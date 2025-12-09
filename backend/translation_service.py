@@ -1,8 +1,6 @@
 import logging
 import os
 import time
-import json
-import httpx
 from typing import AsyncGenerator
 
 import openai
@@ -152,8 +150,6 @@ async def perform_translation(
             "content": msg["content"]
         })
 
-    responses_url = os.path.join(API_URL, "responses")
-
     payload = {
         "model": model,
         "input": input_messages,
@@ -162,46 +158,35 @@ async def perform_translation(
         "stream": stream
     }
 
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://henrycoder.com",
-        "X-Title": "HenryCoder"
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with openai.AsyncOpenAI(
+            api_key=API_KEY, 
+            base_url=API_URL.replace("/chat/completions", "")
+        ) as client:
             if not stream:
                 raise RuntimeError("Non-streaming mode is not supported anymore.")
             if resolved_imports:
                 yield resolved_imports + "\n", "", warnings, errors
             
-            async with client.stream("POST", responses_url, headers=headers, json=payload) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_str = line[6:].strip()
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data_str)
-                            content = ""
-                            reasoning = ""
+            response = await client.responses.create(
+                model=model,
+                input=input_messages,
+                max_output_tokens=10000 if translate_request.options.smart else 32000,
+                temperature=0.0,
+                stream=True
+            )
+            
+            async for event in response:
+                content = ""
+                reasoning = ""
 
-                            if chunk.get("type") == "response.output_text.delta":
-                                content = chunk.get("delta", "")
-                            elif "output" in chunk and len(chunk["output"]) > 0:
-                                output_item = chunk["output"][0]
-                                if "content" in output_item:
-                                    for content_part in output_item["content"]:
-                                        if content_part.get("type") == "output_text":
-                                            content += content_part.get("text", "")
-
-                            if content or reasoning:
-                                yield content, reasoning, warnings, errors
-                        except json.JSONDecodeError as e:
-                            logging.error(f"Failed to decode JSON from line: {data_str} with error: {e}")
-                            continue
+                if event.type == "response.output_text.delta":
+                    content = event.delta
+                elif event.type == "response.reasoning_text.delta":
+                    reasoning = event.delta
+                
+                if content or reasoning:
+                    yield content, reasoning, warnings, errors
 
     except Exception as e:
         raise RuntimeError(f"OpenRouter Responses API request failed: {str(e)}") from e

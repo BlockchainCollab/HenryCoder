@@ -98,7 +98,6 @@ def replace_imports(imports: list[str]) -> str:
             replacements[imp] = f"// {imp} is not available"
 
 
-    prepended_std_imports = ""
     # special replacement cases
     # if ERC20 is imported we need to also include IERC20 translation
     if "@openzeppelin/contracts/token/ERC20/ERC20.sol" in replacements:
@@ -106,16 +105,11 @@ def replace_imports(imports: list[str]) -> str:
             "@openzeppelin/contracts/token/ERC20/IERC20.sol",
             "// @openzeppelin/contracts/token/ERC20/IERC20.sol is not available"
         )
-        prepended_std_imports += 'import "std/fungible_token_interface"\n'
     # if ERC721 is imported we need to also include IERC721 translation
     if "@openzeppelin/contracts/token/ERC721/ERC721.sol" in replacements:
         replacements["@openzeppelin/contracts/token/ERC721/IERC721.sol"] = REPLACEMENT_LIBS.get(
             "@openzeppelin/contracts/token/ERC721/IERC721.sol",
             "// @openzeppelin/contracts/token/ERC721/IERC721.sol is not available"
-        )
-        prepended_std_imports += (
-            'import "std/nft_interface"\n'
-            'import "std/nft_collection_interface"\n'
         )
     # if AccessControl is imported we need to also include IAccessControl translation
     if "@openzeppelin/contracts/access/AccessControl.sol" in replacements:
@@ -123,4 +117,4 @@ def replace_imports(imports: list[str]) -> str:
             "@openzeppelin/contracts/access/IAccessControl.sol",
             "// @openzeppelin/contracts/access/IAccessControl.sol is not available"
         )
-    return prepended_std_imports + "\n\n".join(replacements.values())
+    return "\n\n".join(replacements.values())

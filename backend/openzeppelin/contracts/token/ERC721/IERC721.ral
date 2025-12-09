@@ -1,3 +1,6 @@
+import "std/nft_collection_interface"
+import "std/nft_interface"
+
 // Ralph Translation of IERC721
 // =============================
 

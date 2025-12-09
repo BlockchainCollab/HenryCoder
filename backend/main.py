@@ -10,7 +10,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 # Import the translation service
-from api_types import TranslateRequest, TranslateResponse
+from api_types import (
+    GasEstimateAllFunctionsResponse,
+    GasEstimateRequest,
+    GasEstimateResponse,
+    TranslateRequest,
+    TranslateResponse,
+)
+from gas_estimator import estimate_all_functions, estimate_gas, estimate_with_annotations, get_gas_estimator
 from translation_service import dump_translation, perform_translation
 
 load_dotenv()
@@ -94,6 +101,181 @@ async def health_check():
     Health check endpoint.
     """
     return {"status": "ok", "version": "0.1.0"}
+
+
+# =============================================================================
+# Gas Estimation Endpoints
+# =============================================================================
+
+
+@app.post("/api/gas/estimate", response_model=GasEstimateResponse)
+async def estimate_gas_endpoint(request: GasEstimateRequest):
+    """
+    Estimate gas costs for Ralph smart contract code.
+    
+    Provides a detailed breakdown of gas costs by operation type,
+    including storage operations, computations, asset transfers, and more.
+    
+    Args:
+        request: Contains ralph_code and optional function_name
+    
+    Returns:
+        Detailed gas estimation with breakdown and cost in ALPH
+    """
+    if not request.ralph_code.strip():
+        raise HTTPException(status_code=400, detail="Please provide Ralph code for gas estimation.")
+    
+    try:
+        result = estimate_gas(
+            ralph_code=request.ralph_code,
+            function_name=request.function_name if request.function_name else None
+        )
+        return GasEstimateResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gas estimation failed: {str(e)}")
+
+
+@app.post("/api/gas/estimate/all", response_model=GasEstimateAllFunctionsResponse)
+async def estimate_all_functions_endpoint(request: GasEstimateRequest):
+    """
+    Estimate gas costs for ALL functions in a Ralph contract.
+    
+    Analyzes each function separately and provides individual breakdowns
+    plus a summary comparison table.
+    
+    Args:
+        request: Contains ralph_code (function_name is ignored)
+    
+    Returns:
+        Gas estimation for each function with summary
+    """
+    if not request.ralph_code.strip():
+        raise HTTPException(status_code=400, detail="Please provide Ralph code for gas estimation.")
+    
+    try:
+        results = estimate_all_functions(request.ralph_code)
+        
+        if not results:
+            raise HTTPException(status_code=400, detail="No functions found in the provided Ralph code.")
+        
+        # Build response
+        functions = {}
+        for func_name, result in results.items():
+            functions[func_name] = GasEstimateResponse(**result)
+        
+        # Generate summary report
+        estimator = get_gas_estimator()
+        summary_lines = [
+            "# Gas Estimation Summary",
+            "",
+            "## Function Comparison",
+            "",
+            "| Function | Total Gas | Est. Cost (ALPH) |",
+            "|----------|-----------|------------------|",
+        ]
+        
+        for func_name, response in sorted(functions.items(), key=lambda x: -x[1].total_gas):
+            summary_lines.append(
+                f"| `{func_name}` | {response.total_gas:,} | {response.estimated_cost_alph:.10f} |"
+            )
+        
+        summary_lines.extend([
+            "",
+            "---",
+            f"*Analyzed {len(functions)} function(s)*",
+        ])
+        
+        return GasEstimateAllFunctionsResponse(
+            functions=functions,
+            summary_report="\n".join(summary_lines)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gas estimation failed: {str(e)}")
+
+
+from api_types import GasAnnotatedResponse
+
+
+@app.post("/api/gas/estimate/annotated", response_model=GasAnnotatedResponse)
+async def estimate_annotated_endpoint(request: GasEstimateRequest):
+    """
+    Estimate gas costs with line number annotations for frontend display.
+    
+    Returns gas estimates mapped to specific line numbers, designed for
+    gutter decorations in the code viewer.
+    
+    Args:
+        request: Contains ralph_code (function_name is ignored)
+    
+    Returns:
+        Annotated gas estimates with line positions for each function
+    """
+    if not request.ralph_code.strip():
+        raise HTTPException(status_code=400, detail="Please provide Ralph code for gas estimation.")
+    
+    try:
+        result = estimate_with_annotations(request.ralph_code)
+        return GasAnnotatedResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gas estimation failed: {str(e)}")
+
+
+@app.get("/api/gas/constants")
+async def get_gas_constants():
+    """
+    Get Alephium gas constants used for estimation.
+    
+    Returns the base gas costs for various operations,
+    useful for understanding how estimations are calculated.
+    """
+    from gas_estimator import (
+        CONTRACT_STATE_UPDATE_BASE_GAS,
+        DEFAULT_GAS_PRICE_NANOALPH,
+        GAS_CALL,
+        GAS_CONTRACT_EXISTS,
+        GAS_COPY_CREATE,
+        GAS_CREATE,
+        GAS_DESTROY,
+        GAS_EC_RECOVER,
+        GAS_SIGNATURE,
+        GasTier,
+        MINIMAL_GAS,
+        TX_BASE_GAS,
+        TX_INPUT_BASE_GAS,
+        TX_OUTPUT_BASE_GAS,
+    )
+    
+    return {
+        "transaction": {
+            "tx_base_gas": TX_BASE_GAS,
+            "tx_input_base_gas": TX_INPUT_BASE_GAS,
+            "tx_output_base_gas": TX_OUTPUT_BASE_GAS,
+            "minimal_gas": MINIMAL_GAS,
+        },
+        "gas_tiers": {
+            tier.name.lower(): tier.value for tier in GasTier
+        },
+        "contract_operations": {
+            "gas_create": GAS_CREATE,
+            "gas_copy_create": GAS_COPY_CREATE,
+            "gas_destroy": GAS_DESTROY,
+            "gas_contract_exists": GAS_CONTRACT_EXISTS,
+            "contract_state_update_base": CONTRACT_STATE_UPDATE_BASE_GAS,
+        },
+        "cryptography": {
+            "gas_signature": GAS_SIGNATURE,
+            "gas_ec_recover": GAS_EC_RECOVER,
+        },
+        "calls": {
+            "gas_call": GAS_CALL,
+        },
+        "pricing": {
+            "default_gas_price_nanoalph": DEFAULT_GAS_PRICE_NANOALPH,
+            "description": "1 ALPH = 10^9 nanoALPH",
+        },
+    }
 
 
 import logging

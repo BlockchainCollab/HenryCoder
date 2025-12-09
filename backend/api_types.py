@@ -48,3 +48,57 @@ class ChatResponse(BaseModel):
     message: str
     session_id: str
     timestamp: str
+
+
+# Gas Estimation API Types
+class GasEstimateRequest(BaseModel):
+    ralph_code: str
+    function_name: Optional[str] = None  # Specific function to estimate (None = entire contract)
+
+
+class GasOperationBreakdown(BaseModel):
+    operation: str
+    count: int
+    gas_cost: int
+
+
+class GasEstimateResponse(BaseModel):
+    breakdown: list[GasOperationBreakdown]
+    raw_gas: int
+    total_gas: int
+    minimal_gas: int
+    estimated_cost_alph: float
+    gas_price_nanoalph: int
+    warnings: list[str]
+    report: str  # Markdown formatted report
+
+
+class GasEstimateAllFunctionsResponse(BaseModel):
+    functions: Dict[str, GasEstimateResponse]
+    summary_report: str  # Markdown formatted summary
+
+
+# Annotated Gas Estimation (for frontend gutter decorations)
+class GasFunctionAnnotation(BaseModel):
+    function_name: str
+    start_line: int
+    end_line: int
+    total_gas: int
+    raw_gas: int
+    estimated_cost_alph: float
+    breakdown: list[GasOperationBreakdown]  # Top 5 operations
+    warnings: list[str]
+
+
+class GasAnnotationSummary(BaseModel):
+    total_functions: int
+    average_gas: int
+    most_expensive_function: Optional[str]
+    most_expensive_gas: int
+
+
+class GasAnnotatedResponse(BaseModel):
+    annotations: list[GasFunctionAnnotation]
+    summary: GasAnnotationSummary
+    gas_price_nanoalph: int
+    minimal_gas: int

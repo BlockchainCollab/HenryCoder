@@ -355,6 +355,19 @@
                         >Smarter (thinking)</Label
                       >
                     </div>
+                    <div class="flex items-center gap-3">
+                      <Checkbox
+                        id="showGasEstimates"
+                        :model-value="options.showGasEstimates"
+                        @update:model-value="
+                          (val) => (options.showGasEstimates = Boolean(val))
+                        "
+                        class="custom-checkbox"
+                      />
+                      <Label for="showGasEstimates" class="checkbox-label"
+                        >Show gas estimates</Label
+                      >
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
@@ -409,7 +422,14 @@
               class="flex-1 overflow-auto custom-scrollbar"
             >
               <!-- Show streaming code output during loading -->
-              <CodeViewerWithAnnotations v-if="outputCode" :code="outputCode" :loading="loading" />
+              <CodeViewerWithAnnotations 
+                v-if="outputCode" 
+                :code="outputCode" 
+                :loading="loading"
+                :gas-annotations="gasLineAnnotations"
+                :minimal-gas="gasResponse?.minimal_gas ?? 20000"
+                @update:line-map="handleLineMapUpdate"
+              />
               <div
                 v-if="!outputCode && !loading && !errors.length"
                 class="text-gray-500 text-[length:18px] font-menlo"
@@ -600,7 +620,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from "vue";
+import { ref, watch, nextTick, onMounted, computed } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { createError, useRuntimeConfig } from "#imports";
 import hljs from "highlight.js/lib/core";
@@ -620,6 +640,7 @@ import {
 import type { PreviousTranslation } from "@/lib/api";
 import CodeViewerWithAnnotations from "@/components/CodeViewerWithAnnotations.vue";
 import TranslationProgress from "@/components/TranslationProgress.vue";
+import { useGasEstimation } from "@/composables/useGasEstimation";
 
 hljs.registerLanguage("rust", rust);
 
@@ -642,6 +663,7 @@ const options = ref({
   // peripheral options
   autoCompile: false,
   smart: false, // not implemented yet
+  showGasEstimates: true, // show gas cost annotations
 });
 const copied = ref(false);
 const isScrolled = ref(false);
@@ -652,6 +674,27 @@ const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 const outputContainer = ref<HTMLElement | null>(null);
 
 const runtimeConfig = useRuntimeConfig();
+
+// Gas estimation composable
+const showGasEstimatesRef = computed(() => options.value.showGasEstimates);
+const {
+  lineAnnotations: gasLineAnnotations,
+  response: gasResponse,
+  loading: gasLoading,
+  estimate: estimateGas,
+  updateLineMapping,
+} = useGasEstimation({
+  code: outputCode,
+  apiBase: runtimeConfig.public.apiBase,
+  enabled: showGasEstimatesRef,
+  debounceMs: 1500,
+});
+
+// Handle line mapping updates from CodeViewerWithAnnotations
+// This adjusts gas line numbers when // @@@ annotation lines are removed
+const handleLineMapUpdate = (lineMap: Map<number, number>) => {
+  updateLineMapping(lineMap);
+};
 
 const handleScroll = (event: Event) => {
   // turn in on once animations are added

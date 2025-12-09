@@ -6,6 +6,7 @@ USER_PROMPT_TEMPLATE = (
     "Mimic Solidity defaults when loading from map key that does not exist: {mimic_defaults}. "
     "{translate_erc20}\n"
     "You follow these special instructions exactly:\n"
+    "- Contract statements must be in the order of `maps`, `events`, `consts`, `enums` and `methods`."
     '- MUST NOT use commas "," in enums.\n'
     "- MUST NOT define state variables inside contract body.\n"
     '- MUST NOT use an underscore "_" in front of a function name.\n'

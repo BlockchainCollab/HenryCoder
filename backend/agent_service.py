@@ -276,6 +276,7 @@ Preprocessed code (ready for translation):
 {preprocessed_code}
 ```
 
+DO NOT OUTPUT ANY REASONING ABOUT THIS TOOL'S USAGE, GO STRAIGHT TO NEXT TOOL CALL
 NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
 
             except Exception as e:
@@ -341,7 +342,7 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
                 logger.warning(f"Translation completed. Output length: {len(translated)}")
                 
                 # Return the translated code
-                return f"Translated Ralph code:\n```ralph\n{translated}\n```\n\n"
+                return f"Translated Ralph code:\n```ralph\n{translated}\n```\n\n Write a brief summary of the translation (max 2 sentences)."
             except Exception as e:
                 logger.error(f"Translation tool error: {e}", exc_info=True)
                 return f"Error translating code: {str(e)}"

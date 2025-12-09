@@ -659,10 +659,10 @@ const options = ref({
   optimize: false,
   includeComments: true,
   mimicDefaults: false,
-  translateERC20: false, // new option for ERC20 translation
+  translateERC20: true, // new option for ERC20 translation
   // peripheral options
   autoCompile: false,
-  smart: false, // not implemented yet
+  smart: false,
   showGasEstimates: true, // show gas cost annotations
 });
 const copied = ref(false);

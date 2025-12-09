@@ -117,4 +117,10 @@ def replace_imports(imports: list[str]) -> str:
             'import "std/nft_interface"\n'
             'import "std/nft_collection_interface"\n'
         )
+    # if AccessControl is imported we need to also include IAccessControl translation
+    if "@openzeppelin/contracts/access/AccessControl.sol" in replacements:
+        replacements["@openzeppelin/contracts/access/IAccessControl.sol"] = REPLACEMENT_LIBS.get(
+            "@openzeppelin/contracts/access/IAccessControl.sol",
+            "// @openzeppelin/contracts/access/IAccessControl.sol is not available"
+        )
     return prepended_std_imports + "\n\n".join(replacements.values())

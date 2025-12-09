@@ -1,37 +1,33 @@
-import "std/nft_collection_interface"
-import "std/nft_interface"
-
 // Ralph Translation of IERC721
 // =============================
 
-struct NFTMetadata {
-  mut tokenUri: ByteVec,
-  mut collectionId: ByteVec,
-  mut nftIndex: U256
+@std(id = #0003)
+@using(methodSelector = false)
+Interface INFT {
+   // Token Uri points to a json file containing metadata for the NFT. 
+   // The schema of the json file is available at https://github.com/alephium/alephium-web3/blob/master/packages/web3/std/nft_interface.ral
+   pub fn getTokenUri() -> ByteVec
+
+   // Returns collection id and index of the NFT in the collection.
+   pub fn getCollectionIndex() -> (ByteVec, U256)
 }
 
-struct NFTCollectionMetadata {
-  mut collectionUri: ByteVec,
-  mut name: ByteVec,
-  mut symbol: ByteVec,
-  mut totalSupply: U256
+
+@std(id = #0002)
+@using(methodSelector = false)
+Interface INFTCollection {
+  // Collection Uri points to a json file containing metadata for the NFT collection.
+  // The schema of the json file is available at https://github.com/alephium/alephium-web3/blob/master/packages/web3/std/nft_collection_interface.ral
+  pub fn getCollectionUri() -> ByteVec
+
+  pub fn totalSupply() -> U256
+
+  pub fn nftByIndex(index: U256) -> INFT
+
+  // Validates that the NFT is part of the collection, otherwise throws exception.
+  pub fn validateNFT(nftId: ByteVec, nftIndex: U256) -> ()
 }
 
-// Ralph replaces IERC721 with INFT and INFTCollection interfaces.
-// These are automatically available thanks to the import statements above.
-//
-// Interface INFT {
-//   pub fn getTokenUri() -> ByteVec
-//   pub fn getNFTIndex() -> U256
-//   pub fn getCollectionIndex() -> (ByteVec, U256)
-// }
-//
-// Interface INFTCollection {
-//   pub fn getCollectionUri() -> ByteVec
-//   pub fn totalSupply() -> U256
-//   pub fn nftByIndex(index: U256) -> INFT
-// }
-//
 // =============================================================================
 // IERC721 EVENTS MAPPING
 // =============================================================================

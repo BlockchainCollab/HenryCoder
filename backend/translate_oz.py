@@ -97,24 +97,17 @@ def replace_imports(imports: list[str]) -> str:
         else:
             replacements[imp] = f"// {imp} is not available"
 
+    def find_interface_lib(lib_path: str) -> None | str:
+        """Return path to a related interface library. (The path may not exist)"""
+        src = lib_path.split("/")
+        if src[-1].startswith("I"):
+            return None # already an interface
+        return "/".join(src[:-1] + ["I" + src[-1]])
 
-    # special replacement cases
-    # if ERC20 is imported we need to also include IERC20 translation
-    if "@openzeppelin/contracts/token/ERC20/ERC20.sol" in replacements:
-        replacements["@openzeppelin/contracts/token/ERC20/IERC20.sol"] = REPLACEMENT_LIBS.get(
-            "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-            "// @openzeppelin/contracts/token/ERC20/IERC20.sol is not available"
-        )
-    # if ERC721 is imported we need to also include IERC721 translation
-    if "@openzeppelin/contracts/token/ERC721/ERC721.sol" in replacements:
-        replacements["@openzeppelin/contracts/token/ERC721/IERC721.sol"] = REPLACEMENT_LIBS.get(
-            "@openzeppelin/contracts/token/ERC721/IERC721.sol",
-            "// @openzeppelin/contracts/token/ERC721/IERC721.sol is not available"
-        )
-    # if AccessControl is imported we need to also include IAccessControl translation
-    if "@openzeppelin/contracts/access/AccessControl.sol" in replacements:
-        replacements["@openzeppelin/contracts/access/IAccessControl.sol"] = REPLACEMENT_LIBS.get(
-            "@openzeppelin/contracts/access/IAccessControl.sol",
-            "// @openzeppelin/contracts/access/IAccessControl.sol is not available"
-        )
+    for key in list(replacements.keys()):
+        interface_lib = find_interface_lib(key)
+        if interface_lib and interface_lib not in replacements:
+            if interface_content := REPLACEMENT_LIBS.get(interface_lib):
+                replacements[interface_lib] = interface_content
+
     return "\n\n".join(replacements.values())

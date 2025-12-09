@@ -16,6 +16,12 @@
 // =============================================================================
 // NFT CONTRACT (Individual NFT - replaces tokenId concept)
 // =============================================================================
+struct NFTMetadata {
+  mut tokenUri: ByteVec,
+  mut collectionId: ByteVec,
+  mut nftIndex: U256
+}
+
 Contract NFT(
   mut nftMetadata: NFTMetadata
 ) implements INFT {
@@ -65,7 +71,14 @@ Contract NFT(
 // =============================================================================
 // NFT COLLECTION CONTRACT (replaces ERC721 contract with ownership mappings)
 // =============================================================================
-// @@@ This is a base contract with all necessary methods, client must implement the concrete contract and inherit NFTCollectionBase
+struct NFTCollectionMetadata {
+  mut collectionUri: ByteVec,
+  mut name: ByteVec,
+  mut symbol: ByteVec,
+  mut totalSupply: U256
+}
+
+// This is a base contract with all necessary methods, client must implement the concrete contract and inherit NFTCollectionBase
 Abstract Contract NFTCollectionBase(
   nftTemplateId: ByteVec,
   mut nftcollectionMetadata: NFTCollectionMetadata

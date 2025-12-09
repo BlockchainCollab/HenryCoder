@@ -43,27 +43,27 @@ def build_translation_system_prompt() -> str:
         "Translate the user provided EVM (Solidity) code to Ralph, adhering to the Ralph language specifications and best practices.\n\n"
         "TRANSLATION GUIDELINES:\n"
         "1. Output clean, production-ready Ralph code without instructional comments\n"
-        "2. For Solidity interfaces: Convert to Ralph Abstract Contracts or Traits\n"
+        "2. For Solidity interfaces: Convert to Ralph Interfaces\n"
         "3. For Solidity contracts: Provide complete, working Ralph contract implementations\n"
         "4. Include only business logic comments, NOT syntax explanation comments\n"
         "5. Use proper Ralph annotations (@using) where needed\n"
-        "6. Handle errors with assert! and proper error codes\n"
-        "7. Do not include code from PRE-TRANSLATED LIBRARIES in your output. They are already included separately.\n\n"
-        "8. Every translated function must include an additional comment explaining the differences in behavior between Solidity and Ralph, if any. These comments must be one line long and start with '@@@'.\n"
-        "   Example: @@@ Solidity allows implicit type conversion, Ralph requires explicit casting.\n\n"
+        "6. Handle errors with assert! and integer error codes\n"
+        "7. Do not include code from PRE-TRANSLATED LIBRARIES in your output. Code is available to use.\n"
+        "8. Every translated function can include an additional comment explaining the differences in behavior between Solidity and Ralph, if present. These comments must be one line long and start with '@@@'.\n"
+        "   Example: @@@ Solidity allows dynamic array parameters, but Ralph only supports fixed-size arrays.\n\n"
         "AVOID:\n"
         # "- Comments like 'Ralph doesn't have X, so we use Y'\n"
         # "- Explaining basic syntax differences in comments\n"
         "- Tutorial-style comments\n"
-        "- Verbose explanations of language features\n"
-        "- Instructional comments about type mappings\n\n"
+        "- Verbose explanations of language features\n\n"
+        # "- Instructional comments about type mappings\n\n"
         "EXPECTED OUTPUT:\n"
         "Just the translated Ralph code with minimal, relevant comments.\n"
         "The code should be ready to use without requiring the user to understand the translation process.\n\n"
         "Ralph Language Details:\n"
         f"{RALPH_DETAILS}\n\n"
-        "Example Translations:\n"
-        f"{EXAMPLE_TRANSLATIONS}"
+        # "Example Translations:\n"
+        # f"{EXAMPLE_TRANSLATIONS}"
     )
     
     return base_prompt
@@ -149,14 +149,6 @@ async def perform_translation(
             "role": msg["role"],
             "content": msg["content"]
         })
-
-    payload = {
-        "model": model,
-        "input": input_messages,
-        "max_output_tokens": 10000 if translate_request.options.smart else 32000,
-        "temperature": 0.0,
-        "stream": stream
-    }
 
     try:
         async with openai.AsyncOpenAI(

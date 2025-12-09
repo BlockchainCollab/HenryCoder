@@ -23,7 +23,7 @@
 // ERC20 EVENTS ARE NOT NEEDED IN RALPH:
 // In Ralph, token transfers are native blockchain operations and emit native events.
 
-
+// This is a base contract representing a fungible token in Ralph/Alephium, clients need to implement the concrete type
 Abstract Contract FungibleToken (
   mut tokenMetadata: FungibleTokenMetadata
 ) implements IFungibleToken {

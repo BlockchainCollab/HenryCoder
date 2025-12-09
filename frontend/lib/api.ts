@@ -149,7 +149,7 @@ export async function compileTranslatedCode({
   onError: (val: string[]) => void;
   onSuccess: (message?: string) => void;
 }) {
-  let node_endpoint = "/contracts/compile-contract";
+  let node_endpoint = "/contracts/compile-project";
   let url = `${runtimeConfig.public.nodeUrl}${node_endpoint}`;
   let queryJson = {
     code: outputCode,

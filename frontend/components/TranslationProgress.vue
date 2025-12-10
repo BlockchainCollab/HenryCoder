@@ -242,24 +242,13 @@ const translateStages = [
   },
 ];
 
-// Fix mode stages
+// Fix mode stages - 5 stages: analyse + 3 iterations + complete
 const fixStages = [
-  { id: "analyzing", label: "Analyzing", keywords: ["fixing", "analyzing", "🔧"] },
-  {
-    id: "fixing",
-    label: "Fixing Code",
-    keywords: ["iteration", "attempt", "applying"],
-  },
-  {
-    id: "compiling",
-    label: "Compiling",
-    keywords: ["compiling", "verifying"],
-  },
-  {
-    id: "complete",
-    label: "Complete",
-    keywords: ["✅", "fixed", "success", "complete", "⚠️"],
-  },
+  { id: "analysing", label: "Analysing Error", keywords: ["analysing", "🔍"] },
+  { id: "fixing1", label: "Fix Attempt 1", keywords: ["iteration 1"] },
+  { id: "fixing2", label: "Fix Attempt 2", keywords: ["iteration 2"] },
+  { id: "fixing3", label: "Fix Attempt 3", keywords: ["iteration 3"] },
+  { id: "complete", label: "Complete", keywords: ["✅", "complete", "⚠️", "done"] },
 ];
 
 // Select stages based on mode
@@ -272,20 +261,24 @@ const currentStage = computed(() => {
   const message = props.statusMessage.toLowerCase();
   const currentStages = stages.value;
   
-  // For fix mode, check for completion first
+  // For fix mode, check stages in reverse order (most advanced first)
   if (props.mode === "fix") {
-    if (message.includes("✅") || message.includes("success") || message.includes("⚠️")) {
-      return currentStages.length - 1; // Complete stage
+    if (message.includes("✅") || message.includes("complete") || message.includes("⚠️") || message.includes("done")) {
+      return 4; // Complete stage
     }
-    if (message.includes("compiling") || message.includes("verifying")) {
-      return 2; // Compiling stage
+    if (message.includes("iteration 3") || message.includes("3/3")) {
+      return 3; // Fix attempt 3
     }
-    if (message.includes("iteration") || message.includes("attempt") || message.includes("applying")) {
-      return 1; // Fixing stage
+    if (message.includes("iteration 2") || message.includes("2/3")) {
+      return 2; // Fix attempt 2
     }
-    if (message.includes("fixing") || message.includes("🔧") || message.includes("analyzing")) {
-      return 0; // Analyzing stage
+    if (message.includes("iteration 1") || message.includes("1/3") || message.includes("🔧")) {
+      return 1; // Fix attempt 1
     }
+    if (message.includes("🔍") || message.includes("analysing")) {
+      return 0; // Analysing stage
+    }
+    return 0;
   }
   
   // For translate mode, use keyword matching

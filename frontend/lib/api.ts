@@ -212,16 +212,23 @@ export type FixCodeResult = {
   success: boolean;
 };
 
+type FixStreamEvent =
+  | { type: "stage"; data: { stage: string; message: string } }
+  | { type: "result"; data: { fixed_code: string; iterations: number; success: boolean } }
+  | { type: "error"; data: { message: string } };
+
 export async function fixRalphCode({
   ralphCode,
   error,
   solidityCode,
   runtimeConfig,
+  onStageUpdate,
 }: {
   ralphCode: string;
   error: string;
   solidityCode?: string;
   runtimeConfig: any;
+  onStageUpdate?: (stage: string, message: string) => void;
 }): Promise<FixCodeResult> {
   const response = await fetch(`${runtimeConfig.public.apiBase}/chat/fix`, {
     method: "POST",
@@ -235,17 +242,55 @@ export async function fixRalphCode({
     }),
   });
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     const errorData = await response
       .json()
       .catch(() => ({ detail: "Fix request failed" }));
     throw new Error(errorData.detail || "Failed to fix code");
   }
 
-  const result = await response.json();
-  return {
-    fixedCode: result.fixed_code,
-    iterations: result.iterations,
-    success: result.success,
-  };
+  // Parse streaming response
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: FixCodeResult | null = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      try {
+        const event = JSON.parse(line) as FixStreamEvent;
+
+        if (event.type === "stage" && onStageUpdate) {
+          onStageUpdate(event.data.stage, event.data.message);
+        } else if (event.type === "result") {
+          result = {
+            fixedCode: event.data.fixed_code,
+            iterations: event.data.iterations,
+            success: event.data.success,
+          };
+        } else if (event.type === "error") {
+          throw new Error(event.data.message);
+        }
+      } catch (e) {
+        // Ignore JSON parse errors for incomplete lines
+        if (e instanceof SyntaxError) continue;
+        throw e;
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error("No result received from fix endpoint");
+  }
+
+  return result;
 }

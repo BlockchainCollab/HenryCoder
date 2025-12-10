@@ -355,19 +355,20 @@ async def clear_chat_session(session_id: str):
 from api_types import FixCodeRequest, FixCodeResponse
 
 
-@app.post("/api/chat/fix", response_model=FixCodeResponse)
+@app.post("/api/chat/fix")
 async def fix_code(request: FixCodeRequest):
     """
-    Fixes Ralph code based on a compilation error.
+    Fixes Ralph code based on a compilation error with streaming progress.
     
     Uses the AI agent to analyze the error and apply targeted fixes.
     Iterates up to 3 times to ensure the fix compiles successfully.
+    Streams stage updates for progress tracking.
     
     Args:
         request: Contains ralph_code and error message
     
     Returns:
-        Fixed Ralph code, number of iterations, and success status
+        Streaming response with stage events and final result
     """
     if not request.ralph_code.strip():
         raise HTTPException(status_code=400, detail="Please provide Ralph code to fix.")
@@ -377,20 +378,19 @@ async def fix_code(request: FixCodeRequest):
     
     agent = get_agent()
     
-    try:
-        result = await agent.fix_code(
-            ralph_code=request.ralph_code,
-            error=request.error,
-            solidity_code=request.solidity_code,
-            max_iterations=3
-        )
-        
-        return FixCodeResponse(
-            fixed_code=result["fixed_code"],
-            iterations=result["iterations"],
-            success=result["success"]
-        )
-    except Exception as e:
-        logger.error(f"Fix code error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to fix code: {str(e)}")
+    async def fix_generator():
+        try:
+            async for event in agent.fix_code(
+                ralph_code=request.ralph_code,
+                error=request.error,
+                solidity_code=request.solidity_code,
+                max_iterations=3
+            ):
+                yield json.dumps(event) + "\n"
+        except Exception as e:
+            logger.error(f"Fix code streaming error: {e}", exc_info=True)
+            error_event = {"type": "error", "data": {"message": str(e)}}
+            yield json.dumps(error_event) + "\n"
+    
+    return StreamingResponse(fix_generator(), media_type="application/x-ndjson")
 

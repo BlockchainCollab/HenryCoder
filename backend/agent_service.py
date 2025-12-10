@@ -722,12 +722,12 @@ Do not include any explanation, just the corrected code."""
         error: str,
         solidity_code: Optional[str] = None,
         max_iterations: int = 3,
-    ) -> Dict[str, Any]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Fix Ralph code based on a compilation error.
         
         Iterates up to max_iterations times, attempting to fix the code
-        and verify compilation success.
+        and verify compilation success. Yields stage events for progress tracking.
         
         Args:
             ralph_code: The Ralph code that failed to compile
@@ -735,12 +735,15 @@ Do not include any explanation, just the corrected code."""
             solidity_code: Optional original Solidity code for context
             max_iterations: Maximum number of fix attempts
             
-        Returns:
-            Dict with fixed_code, iterations, and success status
+        Yields:
+            Stage events and final result event
         """
         current_code = ralph_code
         current_error = error
         iterations = 0
+        
+        # Stage 1: Analysing the error
+        yield StreamEvent.stage("analysing", "🔍 Analysing the error...")
         
         # Build context section if Solidity code is provided
         solidity_context = ""
@@ -785,6 +788,9 @@ CORRECT APPROACH:
             iterations += 1
             logger.info(f"Fix iteration {iterations}/{max_iterations}")
             
+            # Stage: Fixing iteration
+            yield StreamEvent.stage("fixing", f"🔧 Fixing the code (iteration {iterations}/{max_iterations})...")
+            
             # Create a focused fix prompt
             fix_prompt = f"""Fix this Ralph code compilation error.
 
@@ -819,11 +825,16 @@ REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only 
                 
                 if compile_result["success"]:
                     logger.info(f"Fix successful after {iterations} iteration(s)")
-                    return {
-                        "fixed_code": fixed_code,
-                        "iterations": iterations,
-                        "success": True
+                    yield StreamEvent.stage("done", "✅ Fix complete!")
+                    yield {
+                        "type": "result",
+                        "data": {
+                            "fixed_code": fixed_code,
+                            "iterations": iterations,
+                            "success": True
+                        }
                     }
+                    return
                 else:
                     # Update error for next iteration
                     current_error = compile_result.get("error", "Unknown compilation error")
@@ -835,10 +846,14 @@ REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only 
         
         # Return best effort after max iterations
         logger.warning(f"Fix failed after {max_iterations} iterations")
-        return {
-            "fixed_code": current_code,
-            "iterations": iterations,
-            "success": False
+        yield StreamEvent.stage("done", "⚠️ Fix complete (with remaining errors)")
+        yield {
+            "type": "result",
+            "data": {
+                "fixed_code": current_code,
+                "iterations": iterations,
+                "success": False
+            }
         }
 
     def _extract_ralph_code(self, text: str) -> str:

@@ -399,46 +399,26 @@
           class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
           <div class="relative flex-1 flex flex-col overflow-hidden">
-            <!-- Simple fixing overlay (for fix mode) -->
+            <!-- Progress overlay for fix mode (expanded) -->
             <div
-              v-if="loading && progressMode === 'fix'"
-              class="absolute inset-0 bg-[#242322]/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center"
+              v-if="loading && progressMode === 'fix' && !progressMinimized"
+              class="absolute inset-0 bg-[#242322]/40 backdrop-blur-[2px] z-10"
             >
-              <div class="flex flex-col items-center gap-4">
-                <!-- Animated wrench icon -->
-                <div class="relative">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-16 w-16 text-[#FF8A00] animate-pulse"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.5"
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.5"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
-                  <!-- Spinning ring around icon -->
-                  <div class="absolute inset-0 -m-2">
-                    <div class="w-20 h-20 border-2 border-[#FF8A00]/30 border-t-[#FF8A00] rounded-full animate-spin"></div>
-                  </div>
-                </div>
-                <!-- Status text -->
-                <div class="text-center">
-                  <p class="text-[#FF8A00] font-semibold text-lg">Fixing Code</p>
-                  <p class="text-[#9E9992] text-sm mt-1">{{ loadingStatus || 'Analyzing and applying fixes...' }}</p>
-                </div>
-              </div>
+              <TranslationProgress
+                :status-message="loadingStatus"
+                :minimized="false"
+                :mode="progressMode"
+                @toggle-minimize="progressMinimized = true"
+              />
             </div>
+            <!-- Minimized progress badge (fix mode) -->
+            <TranslationProgress
+              v-if="loading && progressMode === 'fix' && progressMinimized"
+              :status-message="loadingStatus"
+              :minimized="true"
+              :mode="progressMode"
+              @toggle-minimize="progressMinimized = false"
+            />
             <!-- Transparent progress overlay for translation (expanded) -->
             <div
               v-if="loading && progressMode === 'translate' && !progressMinimized"
@@ -920,8 +900,8 @@ const upgradeTranslatedCode = async () => {
   }
 
   loading.value = true;
-  progressMode.value = "fix"; // Set fix mode - shows simple overlay
-  loadingStatus.value = "Analyzing errors and applying fixes...";
+  progressMode.value = "fix"; // Set fix mode
+  loadingStatus.value = "🔍 Analysing the error...";
   compiled.value = false;
   successMessage.value = null;
 
@@ -931,6 +911,9 @@ const upgradeTranslatedCode = async () => {
       error: errors.value.join("\n"),
       solidityCode: sourceCode.value,
       runtimeConfig,
+      onStageUpdate: (stage, message) => {
+        loadingStatus.value = message;
+      },
     });
 
     outputCode.value = result.fixedCode;

@@ -210,17 +210,20 @@ import { computed } from "vue";
 interface Props {
   statusMessage: string;
   minimized?: boolean;
+  mode?: "translate" | "fix";
 }
 
 const props = withDefaults(defineProps<Props>(), {
   minimized: false,
+  mode: "translate",
 });
 
 defineEmits<{
   (e: 'toggle-minimize'): void;
 }>();
 
-const stages = [
+// Translation mode stages
+const translateStages = [
   { id: "thinking", label: "Thinking", keywords: ["thinking", "analyzing"] },
   {
     id: "reading",
@@ -239,12 +242,55 @@ const stages = [
   },
 ];
 
+// Fix mode stages
+const fixStages = [
+  { id: "analyzing", label: "Analyzing", keywords: ["fixing", "analyzing", "🔧"] },
+  {
+    id: "fixing",
+    label: "Fixing Code",
+    keywords: ["iteration", "attempt", "applying"],
+  },
+  {
+    id: "compiling",
+    label: "Compiling",
+    keywords: ["compiling", "verifying"],
+  },
+  {
+    id: "complete",
+    label: "Complete",
+    keywords: ["✅", "fixed", "success", "complete", "⚠️"],
+  },
+];
+
+// Select stages based on mode
+const stages = computed(() => {
+  return props.mode === "fix" ? fixStages : translateStages;
+});
+
 // Detect current stage based on status message
 const currentStage = computed(() => {
   const message = props.statusMessage.toLowerCase();
-  console.log("Status Message:", message);
-  for (let i = stages.length - 1; i >= 0; i--) {
-    const stage = stages[i];
+  const currentStages = stages.value;
+  
+  // For fix mode, check for completion first
+  if (props.mode === "fix") {
+    if (message.includes("✅") || message.includes("success") || message.includes("⚠️")) {
+      return currentStages.length - 1; // Complete stage
+    }
+    if (message.includes("compiling") || message.includes("verifying")) {
+      return 2; // Compiling stage
+    }
+    if (message.includes("iteration") || message.includes("attempt") || message.includes("applying")) {
+      return 1; // Fixing stage
+    }
+    if (message.includes("fixing") || message.includes("🔧") || message.includes("analyzing")) {
+      return 0; // Analyzing stage
+    }
+  }
+  
+  // For translate mode, use keyword matching
+  for (let i = currentStages.length - 1; i >= 0; i--) {
+    const stage = currentStages[i];
     if (stage && stage.keywords.some((keyword) => message.includes(keyword))) {
       return i;
     }
@@ -254,12 +300,12 @@ const currentStage = computed(() => {
 });
 
 const currentStageLabel = computed(() => {
-  return stages[currentStage.value]?.label || "Processing";
+  return stages.value[currentStage.value]?.label || "Processing";
 });
 
 // Calculate progress (0-100)
 const progress = computed(() => {
-  const stageProgress = (currentStage.value / (stages.length - 1)) * 100;
+  const stageProgress = (currentStage.value / (stages.value.length - 1)) * 100;
   return Math.min(Math.max(stageProgress, 10), 95); // Keep between 10-95% while processing
 });
 </script>

@@ -201,3 +201,48 @@ export async function compileTranslatedCode({
       onError([String(error)]);
     });
 }
+
+// Fix Ralph code based on compilation error
+export type FixCodeResult = {
+  fixedCode: string;
+  iterations: number;
+  success: boolean;
+};
+
+export async function fixRalphCode({
+  ralphCode,
+  error,
+  solidityCode,
+  runtimeConfig,
+}: {
+  ralphCode: string;
+  error: string;
+  solidityCode?: string;
+  runtimeConfig: any;
+}): Promise<FixCodeResult> {
+  const response = await fetch(`${runtimeConfig.public.apiBase}/chat/fix`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ralph_code: ralphCode,
+      error: error,
+      solidity_code: solidityCode,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ detail: "Fix request failed" }));
+    throw new Error(errorData.detail || "Failed to fix code");
+  }
+
+  const result = await response.json();
+  return {
+    fixedCode: result.fixed_code,
+    iterations: result.iterations,
+    success: result.success,
+  };
+}

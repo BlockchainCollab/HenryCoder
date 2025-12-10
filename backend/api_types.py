@@ -102,3 +102,16 @@ class GasAnnotatedResponse(BaseModel):
     summary: GasAnnotationSummary
     gas_price_nanoalph: int
     minimal_gas: int
+
+
+# Fix Code API Types (for retranslation with error fixing)
+class FixCodeRequest(BaseModel):
+    ralph_code: str
+    error: str
+    solidity_code: Optional[str] = None  # Original Solidity code for context
+
+
+class FixCodeResponse(BaseModel):
+    fixed_code: str
+    iterations: int  # How many fix attempts were made
+    success: bool  # Whether the fix was successful (compiled without errors)

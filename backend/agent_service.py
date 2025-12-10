@@ -17,6 +17,7 @@ from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 
 from api_types import TranslateRequest, TranslationOptions
+from translation_context import RALPH_DETAILS
 from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT
 from translation_service import perform_translation
 
@@ -428,7 +429,37 @@ Add buying, cancelation, and fee logic to suit your use case.
 
             return templates.get(contract_type.lower(), "Template not found. Available: token, nft, marketplace")
 
-        return [resolve_solidity_imports, translate_evm_to_ralph, get_ralph_documentation, generate_ralph_template]
+        @tool
+        def fix_ralph_code(ralph_code: str, error: str) -> str:
+            """
+            Fixes Ralph code based on a compilation error.
+            
+            Use this tool when you need to fix Ralph code that failed to compile.
+            Analyzes the error message and applies targeted fixes.
+            
+            Args:
+                ralph_code: The Ralph code that failed to compile
+                error: The compilation error message
+            
+            Returns:
+                Fixed Ralph code
+            """
+            # This tool is a marker - the actual fixing is done by the LLM
+            # The tool just structures the input for the agent
+            return f"""Please fix this Ralph code based on the compilation error.
+
+COMPILATION ERROR:
+{error}
+
+RALPH CODE TO FIX:
+```ralph
+{ralph_code}
+```
+
+Analyze the error carefully and return ONLY the fixed Ralph code.
+Do not include any explanation, just the corrected code."""
+
+        return [resolve_solidity_imports, translate_evm_to_ralph, get_ralph_documentation, generate_ralph_template, fix_ralph_code]
 
     def _get_system_prompt(self) -> str:
         """Build the system prompt for the agent."""
@@ -655,6 +686,194 @@ Add buying, cancelation, and fee logic to suit your use case.
         if session_id in self.session_options:
             del self.session_options[session_id]
             logger.info(f"Cleared options for session: {session_id}")
+
+    async def fix_code(
+        self,
+        ralph_code: str,
+        error: str,
+        solidity_code: Optional[str] = None,
+        max_iterations: int = 3,
+    ) -> Dict[str, Any]:
+        """
+        Fix Ralph code based on a compilation error.
+        
+        Iterates up to max_iterations times, attempting to fix the code
+        and verify compilation success.
+        
+        Args:
+            ralph_code: The Ralph code that failed to compile
+            error: The compilation error message
+            solidity_code: Optional original Solidity code for context
+            max_iterations: Maximum number of fix attempts
+            
+        Returns:
+            Dict with fixed_code, iterations, and success status
+        """
+        current_code = ralph_code
+        current_error = error
+        iterations = 0
+        
+        # Build context section if Solidity code is provided
+        solidity_context = ""
+        if solidity_code:
+            solidity_context = f"""
+## Original Solidity Code (for reference)
+The Ralph code was translated from this Solidity code. Use it to understand the INTENDED functionality.
+CRITICAL: The fixed Ralph code MUST implement ALL functionality from the original Solidity.
+
+```solidity
+{solidity_code}
+```
+"""
+        
+        fix_system_prompt = f"""You are an expert Ralph smart contract developer.
+Your task is to fix Ralph code that has compilation errors.
+
+## Ralph Language Reference
+{RALPH_DETAILS}
+{solidity_context}
+## CRITICAL RULES - VIOLATION WILL CAUSE FAILURE:
+1. Analyze the error message and fix ONLY the specific syntax/compilation error mentioned
+2. You MUST keep ALL existing code - every function, every field, every event, every line
+3. NEVER delete or simplify code - only modify the specific broken syntax
+4. NEVER return a shorter or simpler version of the contract
+5. If there's a function with 50 lines, the fixed version must have ~50 lines with the same logic
+6. Return ONLY the complete fixed Ralph code with ALL original functionality preserved
+7. Do NOT include any explanation, markdown, or comments about what you changed
+8. Do NOT wrap the code in ```ralph``` blocks
+
+EXAMPLE OF WHAT NOT TO DO:
+- Original has 200 lines with 10 functions -> Fixed has 4 lines with no functions = WRONG
+- Original has batchTransfer logic -> Fixed removes the logic = WRONG
+
+CORRECT APPROACH:
+- Find the specific error (e.g., wrong syntax on line 45)
+- Fix ONLY that line/syntax issue
+- Return the COMPLETE code with all 200 lines, 10 functions, etc.
+"""
+
+        for iteration in range(max_iterations):
+            iterations += 1
+            logger.info(f"Fix iteration {iterations}/{max_iterations}")
+            
+            # Create a focused fix prompt
+            fix_prompt = f"""Fix this Ralph code compilation error.
+
+ERROR MESSAGE TO FIX:
+{current_error}
+
+COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
+{current_code}
+
+REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only fix the specific compilation error above. Do not simplify or remove any code."""
+
+            try:
+                # Use direct LLM call (not agent) for focused fixing
+                response = await self.llm.ainvoke([
+                    {"role": "system", "content": fix_system_prompt},
+                    {"role": "user", "content": fix_prompt}
+                ])
+                
+                fixed_code = response.content.strip()
+                
+                # Clean up any markdown code blocks if LLM added them
+                fixed_code = self._extract_ralph_code(fixed_code)
+                
+                if not fixed_code:
+                    logger.warning(f"Empty fix result on iteration {iterations}")
+                    continue
+                
+                current_code = fixed_code
+                
+                # Try to compile the fixed code
+                compile_result = await self._compile_ralph_code(fixed_code)
+                
+                if compile_result["success"]:
+                    logger.info(f"Fix successful after {iterations} iteration(s)")
+                    return {
+                        "fixed_code": fixed_code,
+                        "iterations": iterations,
+                        "success": True
+                    }
+                else:
+                    # Update error for next iteration
+                    current_error = compile_result.get("error", "Unknown compilation error")
+                    logger.info(f"Compilation still failing: {current_error[:100]}...")
+                    
+            except Exception as e:
+                logger.error(f"Fix iteration {iterations} failed: {e}", exc_info=True)
+                continue
+        
+        # Return best effort after max iterations
+        logger.warning(f"Fix failed after {max_iterations} iterations")
+        return {
+            "fixed_code": current_code,
+            "iterations": iterations,
+            "success": False
+        }
+
+    def _extract_ralph_code(self, text: str) -> str:
+        """Extract Ralph code from LLM response, removing markdown blocks."""
+        # Remove markdown code blocks
+        ralph_match = re.search(r'```ralph\s*\n([\s\S]*?)```', text)
+        if ralph_match:
+            return ralph_match.group(1).strip()
+        
+        # Try generic code blocks
+        code_match = re.search(r'```\s*\n?([\s\S]*?)```', text)
+        if code_match:
+            return code_match.group(1).strip()
+        
+        # Return as-is if no code blocks
+        return text.strip()
+
+    async def _compile_ralph_code(self, code: str) -> Dict[str, Any]:
+        """
+        Attempt to compile Ralph code using the Alephium node.
+        
+        Args:
+            code: Ralph code to compile
+            
+        Returns:
+            Dict with success status and optional error message
+        """
+        import aiohttp
+        
+        node_url = os.getenv("NODE_URL", "https://node.testnet.alephium.org")
+        compile_endpoint = f"{node_url}/contracts/compile-project"
+        
+        compile_request = {
+            "code": code,
+            "compilerOptions": {
+                "ignoreUnusedConstantsWarnings": True,
+                "ignoreUnusedVariablesWarnings": True,
+                "ignoreUnusedFieldsWarnings": True,
+                "ignoreUnusedPrivateFunctionsWarnings": True,
+                "ignoreUnusedFunctionReturnWarnings": True,
+            }
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    compile_endpoint,
+                    json=compile_request,
+                    headers={"Content-Type": "application/json"}
+                ) as response:
+                    if response.status == 200:
+                        return {"success": True}
+                    else:
+                        error_data = await response.json()
+                        error_msg = error_data.get("detail", str(error_data))
+                        
+                        # Check for abstract contract message (not a real error)
+                        if "Code generation is not supported for abstract contract" in error_msg:
+                            return {"success": True}
+                        
+                        return {"success": False, "error": error_msg}
+        except Exception as e:
+            logger.error(f"Compilation check failed: {e}")
+            return {"success": False, "error": str(e)}
 
 
 # Global agent instance

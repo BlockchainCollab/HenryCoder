@@ -399,22 +399,64 @@
           class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
           <div class="relative flex-1 flex flex-col overflow-hidden">
-            <!-- Transparent progress overlay (expanded) -->
+            <!-- Simple fixing overlay (for fix mode) -->
             <div
-              v-if="loading && !progressMinimized"
+              v-if="loading && progressMode === 'fix'"
+              class="absolute inset-0 bg-[#242322]/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center"
+            >
+              <div class="flex flex-col items-center gap-4">
+                <!-- Animated wrench icon -->
+                <div class="relative">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-16 w-16 text-[#FF8A00] animate-pulse"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                  <!-- Spinning ring around icon -->
+                  <div class="absolute inset-0 -m-2">
+                    <div class="w-20 h-20 border-2 border-[#FF8A00]/30 border-t-[#FF8A00] rounded-full animate-spin"></div>
+                  </div>
+                </div>
+                <!-- Status text -->
+                <div class="text-center">
+                  <p class="text-[#FF8A00] font-semibold text-lg">Fixing Code</p>
+                  <p class="text-[#9E9992] text-sm mt-1">{{ loadingStatus || 'Analyzing and applying fixes...' }}</p>
+                </div>
+              </div>
+            </div>
+            <!-- Transparent progress overlay for translation (expanded) -->
+            <div
+              v-if="loading && progressMode === 'translate' && !progressMinimized"
               class="absolute inset-0 bg-[#242322]/40 backdrop-blur-[2px] z-10"
             >
               <TranslationProgress
                 :status-message="loadingStatus"
                 :minimized="false"
+                :mode="progressMode"
                 @toggle-minimize="progressMinimized = true"
               />
             </div>
-            <!-- Minimized progress badge -->
+            <!-- Minimized progress badge (translation only) -->
             <TranslationProgress
-              v-if="loading && progressMinimized"
+              v-if="loading && progressMode === 'translate' && progressMinimized"
               :status-message="loadingStatus"
               :minimized="true"
+              :mode="progressMode"
               @toggle-minimize="progressMinimized = false"
             />
             <div
@@ -636,6 +678,7 @@ import { Label } from "@/components/ui/label";
 import {
   translateCode as apiTranslateCode,
   compileTranslatedCode as apiCompileTranslatedCode,
+  fixRalphCode,
 } from "@/lib/api";
 import type { PreviousTranslation } from "@/lib/api";
 import CodeViewerWithAnnotations from "@/components/CodeViewerWithAnnotations.vue";
@@ -670,6 +713,7 @@ const isScrolled = ref(false);
 const consentOpen = ref(true);
 const errorsOpen = ref(true);
 const progressMinimized = ref(false);
+const progressMode = ref<"translate" | "fix">("translate");
 const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 const outputContainer = ref<HTMLElement | null>(null);
 
@@ -869,19 +913,59 @@ const compileTranslatedCode = async () => {
 
 const upgradeTranslatedCode = async () => {
   upgradeCounter.value++;
-  let code = "";
-  if (upgradeCounter.value == 3) {
-    code += "// Not all EVM features are supported on Alephium\n";
-    code +=
-      "// In some cases compiler error messages may not be sufficient to debug the issue\n";
-    code +=
-      "// If you encounter problems, see supported features on GitHub or try building locally\n";
+  
+  // Use the fix API instead of retranslating from scratch
+  if (errors.value.length === 0) {
+    return; // No errors to fix
   }
-  return translateCodeInner(code, {
-    source_code: outputCode.value,
-    warnings: [],
-    errors: errors.value,
-  });
+
+  loading.value = true;
+  progressMode.value = "fix"; // Set fix mode - shows simple overlay
+  loadingStatus.value = "Analyzing errors and applying fixes...";
+  compiled.value = false;
+  successMessage.value = null;
+
+  try {
+    const result = await fixRalphCode({
+      ralphCode: outputCode.value,
+      error: errors.value.join("\n"),
+      solidityCode: sourceCode.value,
+      runtimeConfig,
+    });
+
+    outputCode.value = result.fixedCode;
+    errors.value = [];
+    
+    if (result.success) {
+      // compiled.value = true;
+      successMessage.value = `Code fixed and compiled successfully in ${result.iterations} iteration(s)!`;
+    } else {
+      // Auto-compile to check if there are remaining errors
+      if (options.value.autoCompile) {
+        await compileTranslatedCode();
+      }
+    }
+  } catch (e: any) {
+    console.error("Fix error:", e);
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    errors.value = [errorMessage];
+    
+    // Fallback to retranslation if fix API fails
+    if (upgradeCounter.value >= 3) {
+      progressMode.value = "translate"; // Switch back to translate mode
+      let code = "// Not all EVM features are supported on Alephium\n";
+      code += "// In some cases compiler error messages may not be sufficient to debug the issue\n";
+      code += "// If you encounter problems, see supported features on GitHub or try building locally\n";
+      return translateCodeInner(code, {
+        source_code: outputCode.value,
+        warnings: [],
+        errors: errors.value,
+      });
+    }
+  } finally {
+    loading.value = false;
+    progressMode.value = "translate"; // Reset to translate mode after completion
+  }
 };
 </script>
 

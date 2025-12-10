@@ -5,3 +5,4 @@ httpx
 openai
 langchain==1.0.8
 langchain-openai==1.0.3
+aiohttp

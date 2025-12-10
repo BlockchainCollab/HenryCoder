@@ -349,3 +349,48 @@ async def clear_chat_session(session_id: str):
     agent = get_agent()
     agent.clear_session(session_id)
     return {"status": "ok", "message": f"Session {session_id} cleared"}
+
+
+# Fix Code Endpoint
+from api_types import FixCodeRequest, FixCodeResponse
+
+
+@app.post("/api/chat/fix", response_model=FixCodeResponse)
+async def fix_code(request: FixCodeRequest):
+    """
+    Fixes Ralph code based on a compilation error.
+    
+    Uses the AI agent to analyze the error and apply targeted fixes.
+    Iterates up to 3 times to ensure the fix compiles successfully.
+    
+    Args:
+        request: Contains ralph_code and error message
+    
+    Returns:
+        Fixed Ralph code, number of iterations, and success status
+    """
+    if not request.ralph_code.strip():
+        raise HTTPException(status_code=400, detail="Please provide Ralph code to fix.")
+    
+    if not request.error.strip():
+        raise HTTPException(status_code=400, detail="Please provide the compilation error.")
+    
+    agent = get_agent()
+    
+    try:
+        result = await agent.fix_code(
+            ralph_code=request.ralph_code,
+            error=request.error,
+            solidity_code=request.solidity_code,
+            max_iterations=3
+        )
+        
+        return FixCodeResponse(
+            fixed_code=result["fixed_code"],
+            iterations=result["iterations"],
+            success=result["success"]
+        )
+    except Exception as e:
+        logger.error(f"Fix code error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fix code: {str(e)}")
+

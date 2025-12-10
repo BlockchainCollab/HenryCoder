@@ -481,7 +481,7 @@
               <!-- Success Display Section -->
               <section v-if="successMessage && !loading" class="mt-2 p-1">
                 <div
-                  class="text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+                  class="absolute bottom-0 left-0 right-0 text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
                 >
                   <ul>
                     <li class="font-mono text-xs">{{ successMessage }}</li>

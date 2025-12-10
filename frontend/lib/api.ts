@@ -11,21 +11,18 @@ type AgentChunk =
   | { type: "content"; data: string }
   | { type: "translation_chunk"; data: string };
 
-// Helper function to extract Ralph code from content
-function extractRalphCode(content: string): string {
-  // Remove "Translated Ralph code:" prefix if present
-  let cleaned = content.replace(/^Translated Ralph code:\s*\n?/i, "");
-
-  // Extract code between ```ralph and ```
-  const ralphMatch = cleaned.match(/```ralph\s*\n([\s\S]*?)```/);
-  if (ralphMatch && ralphMatch[1]) {
-    return ralphMatch[1].trim();
-  }
-
-  // Fallback: try to remove any markdown code blocks
-  cleaned = cleaned.replace(/```ralph\s*\n?/g, "");
-  cleaned = cleaned.replace(/```\s*$/g, "");
-
+/**
+ * Cleans markdown code block wrappers from translated code.
+ * Removes patterns like: ```ralph, ```solidity, ```, and standalone "ralph" or "solidity" lines.
+ */
+function cleanMarkdownFromCode(code: string): string {
+  // Remove opening markdown code fence with optional language
+  let cleaned = code.replace(/^```(?:ralph|solidity)?\s*\n?/i, "");
+  // Remove standalone language identifier at start (ralph or solidity on its own line)
+  cleaned = cleaned.replace(/^(?:ralph|solidity)\s*\n/i, "");
+  // Remove closing markdown code fence
+  cleaned = cleaned.replace(/\n?```\s*$/g, "");
+  // Trim leading/trailing whitespace
   return cleaned.trim();
 }
 
@@ -128,6 +125,12 @@ export async function translateCode({
       }
     }
 
+    // Clean up any markdown artifacts from the final output
+    const cleanedCode = cleanMarkdownFromCode(streamedTranslationCode);
+    if (cleanedCode !== streamedTranslationCode) {
+      setOutputCode(cleanedCode);
+    }
+    
     setLoadingStatus("✅ Translation complete");
     setErrors(errorsArr);
   } catch (e: any) {

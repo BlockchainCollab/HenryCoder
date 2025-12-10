@@ -270,7 +270,6 @@ class ChatAgent:
                 return f"""✓ Imports successfully resolved!
 
 Found and resolved {len(imports)} import(s):
-{chr(10).join(f'  - {imp}' for imp in imports)}
 
 Preprocessed code (ready for translation):
 ```solidity
@@ -342,8 +341,8 @@ NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
 
                 logger.warning(f"Translation completed. Output length: {len(translated)}")
                 
-                # Return the translated code
-                return f"Translated Ralph code:\n```ralph\n{translated}\n```\n\n Write a brief summary of the translation (max 2 sentences)."
+                # Return just a confirmation - the actual code was already streamed via chunks
+                return "✓ Translation complete. The Ralph code has been generated."
             except Exception as e:
                 logger.error(f"Translation tool error: {e}", exc_info=True)
                 return f"Error translating code: {str(e)}"
@@ -477,7 +476,11 @@ Do not include any explanation, just the corrected code."""
             "2. If YES → ALWAYS use resolve_solidity_imports tool FIRST\n"
             "3. Then use translate_evm_to_ralph with the preprocessed code\n"
             "4. If NO imports → directly use translate_evm_to_ralph\n\n"
-            "When using tools that return code, include the full output in your response."
+            "IMPORTANT OUTPUT RULES:\n"
+            "- After translation is complete, DO NOT generate any additional text, summaries, or explanations\n"
+            "- The code is streamed directly to the user - no need to repeat it or comment on it\n"
+            "- Only respond with text if the user asks a question (not for translations)\n"
+            "- Keep tool-related output minimal and functional"
         )
 
     async def chat(
@@ -532,13 +535,14 @@ Do not include any explanation, just the corrected code."""
             # Invoke the agent with streaming
             full_response = ""
             agent_done = False
+            translation_completed = False  # Flag to suppress content after translation
             
             try:
                 yield StreamEvent.stage("generating", "Processing...")
 
                 async def run_agent_and_emit_events():
                     """Run the agent and push all events to the async queue."""
-                    nonlocal full_response, agent_done
+                    nonlocal full_response, agent_done, translation_completed
                     try:
                         async for event in self.agent.astream_events({"messages": [{"role": "user", "content": message}]}):
                             event_type = event.get("event")
@@ -554,6 +558,14 @@ Do not include any explanation, just the corrected code."""
                                 tool_name = event.get("name", "unknown")
                                 tool_data = event.get("data", {})
                                 tool_output = tool_data.get("output")
+                                
+                                # Mark translation as complete to suppress further content streaming
+                                if tool_name == "translate_evm_to_ralph":
+                                    translation_completed = True
+                                    # Signal immediate completion - no need to wait for agent to finish
+                                    await agent_event_queue.put(StreamEvent.tool_end(tool_name))
+                                    await agent_event_queue.put(StreamEvent.stage("done"))
+                                    return  # Exit the agent loop immediately
                                 
                                 # Extract string content from ToolMessage
                                 if tool_output:
@@ -572,6 +584,9 @@ Do not include any explanation, just the corrected code."""
                                 await agent_event_queue.put(StreamEvent.tool_end(tool_name))
 
                             elif event_type == "on_chat_model_stream":
+                                # Skip content streaming after translation is complete
+                                if translation_completed:
+                                    continue
                                 chunk = event.get("data", {}).get("chunk")
                                 if chunk and hasattr(chunk, "content"):
                                     content = chunk.content
@@ -580,6 +595,9 @@ Do not include any explanation, just the corrected code."""
                                         await agent_event_queue.put(StreamEvent.content(content))
 
                             elif event_type == "on_chain_end":
+                                # Skip final content after translation is complete
+                                if translation_completed:
+                                    continue
                                 output = event.get("data", {}).get("output")
                                 if isinstance(output, str):
                                     final_text = output
@@ -614,6 +632,16 @@ Do not include any explanation, just the corrected code."""
                     try:
                         event = await asyncio.wait_for(agent_event_queue.get(), timeout=0.05)
                         yield event
+                        
+                        # Check if this was the "done" stage - exit early
+                        if event.get("type") == "stage" and event.get("data", {}).get("stage") == "done":
+                            # Cancel agent task since we're done
+                            agent_task.cancel()
+                            try:
+                                await agent_task
+                            except asyncio.CancelledError:
+                                pass
+                            break
                     except asyncio.TimeoutError:
                         # No agent event available, continue polling
                         pass
@@ -626,8 +654,9 @@ Do not include any explanation, just the corrected code."""
                     except queue.Empty:
                         break
 
-                # Wait for agent task to complete (should already be done)
-                await agent_task
+                # Wait for agent task to complete if not already done
+                if not agent_task.done():
+                    await agent_task
 
                 # Store message in history
                 self.sessions.setdefault(session_id, [])

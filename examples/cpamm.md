@@ -1,8 +1,253 @@
 # Constant Product Automated Market Maker (CPAMM) translation
 
 ## Solidity source
-The solidity code is available online at: https://solidity-by-example.org/defi/constant-product-amm/
-This is a simpler version of the UniswapV2 contract.
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract CPAMM {
+    IERC20 public immutable token0;
+    IERC20 public immutable token1;
+
+    uint256 public reserve0;
+    uint256 public reserve1;
+
+    uint256 public totalSupply;
+    mapping(address => uint256) public balanceOf;
+
+    constructor(address _token0, address _token1) {
+        token0 = IERC20(_token0);
+        token1 = IERC20(_token1);
+    }
+
+    function _mint(address _to, uint256 _amount) private {
+        balanceOf[_to] += _amount;
+        totalSupply += _amount;
+    }
+
+    function _burn(address _from, uint256 _amount) private {
+        balanceOf[_from] -= _amount;
+        totalSupply -= _amount;
+    }
+
+    function _update(uint256 _reserve0, uint256 _reserve1) private {
+        reserve0 = _reserve0;
+        reserve1 = _reserve1;
+    }
+
+    function swap(address _tokenIn, uint256 _amountIn)
+        external
+        returns (uint256 amountOut)
+    {
+        require(
+            _tokenIn == address(token0) || _tokenIn == address(token1),
+            "invalid token"
+        );
+        require(_amountIn > 0, "amount in = 0");
+
+        bool isToken0 = _tokenIn == address(token0);
+        (IERC20 tokenIn, IERC20 tokenOut, uint256 reserveIn, uint256 reserveOut)
+        = isToken0
+            ? (token0, token1, reserve0, reserve1)
+            : (token1, token0, reserve1, reserve0);
+
+        tokenIn.transferFrom(msg.sender, address(this), _amountIn);
+
+        /*
+        How many dy for dx?
+
+        xy = k
+        (x + dx)(y - dy) = k
+        y - dy = k / (x + dx)
+        y - k / (x + dx) = dy
+        y - xy / (x + dx) = dy
+        (yx + ydx - xy) / (x + dx) = dy
+        ydx / (x + dx) = dy
+        */
+        // 0.3% fee
+        uint256 amountInWithFee = (_amountIn * 997) / 1000;
+        amountOut =
+            (reserveOut * amountInWithFee) / (reserveIn + amountInWithFee);
+
+        tokenOut.transfer(msg.sender, amountOut);
+
+        _update(
+            token0.balanceOf(address(this)), token1.balanceOf(address(this))
+        );
+    }
+
+    function addLiquidity(uint256 _amount0, uint256 _amount1)
+        external
+        returns (uint256 shares)
+    {
+        token0.transferFrom(msg.sender, address(this), _amount0);
+        token1.transferFrom(msg.sender, address(this), _amount1);
+
+        /*
+        How many dx, dy to add?
+
+        xy = k
+        (x + dx)(y + dy) = k'
+
+        No price change, before and after adding liquidity
+        x / y = (x + dx) / (y + dy)
+
+        x(y + dy) = y(x + dx)
+        x * dy = y * dx
+
+        x / y = dx / dy
+        dy = y / x * dx
+        */
+        if (reserve0 > 0 || reserve1 > 0) {
+            require(
+                reserve0 * _amount1 == reserve1 * _amount0, "x / y != dx / dy"
+            );
+        }
+
+        /*
+        How many shares to mint?
+
+        f(x, y) = value of liquidity
+        We will define f(x, y) = sqrt(xy)
+
+        L0 = f(x, y)
+        L1 = f(x + dx, y + dy)
+        T = total shares
+        s = shares to mint
+
+        Total shares should increase proportional to increase in liquidity
+        L1 / L0 = (T + s) / T
+
+        L1 * T = L0 * (T + s)
+
+        (L1 - L0) * T / L0 = s
+        */
+
+        /*
+        Claim
+        (L1 - L0) / L0 = dx / x = dy / y
+
+        Proof
+        --- Equation 1 ---
+        (L1 - L0) / L0 = (sqrt((x + dx)(y + dy)) - sqrt(xy)) / sqrt(xy)
+
+        dx / dy = x / y so replace dy = dx * y / x
+
+        --- Equation 2 ---
+        Equation 1 = (sqrt(xy + 2ydx + dx^2 * y / x) - sqrt(xy)) / sqrt(xy)
+
+        Multiply by sqrt(x) / sqrt(x)
+        Equation 2 = (sqrt(x^2y + 2xydx + dx^2 * y) - sqrt(x^2y)) / sqrt(x^2y)
+                   = (sqrt(y)(sqrt(x^2 + 2xdx + dx^2) - sqrt(x^2)) / (sqrt(y)sqrt(x^2))
+
+        sqrt(y) on top and bottom cancels out
+
+        --- Equation 3 ---
+        Equation 2 = (sqrt(x^2 + 2xdx + dx^2) - sqrt(x^2)) / (sqrt(x^2)
+        = (sqrt((x + dx)^2) - sqrt(x^2)) / sqrt(x^2)
+        = ((x + dx) - x) / x
+        = dx / x
+
+        Since dx / dy = x / y,
+        dx / x = dy / y
+
+        Finally
+        (L1 - L0) / L0 = dx / x = dy / y
+        */
+        if (totalSupply == 0) {
+            shares = _sqrt(_amount0 * _amount1);
+        } else {
+            shares = _min(
+                (_amount0 * totalSupply) / reserve0,
+                (_amount1 * totalSupply) / reserve1
+            );
+        }
+        require(shares > 0, "shares = 0");
+        _mint(msg.sender, shares);
+
+        _update(
+            token0.balanceOf(address(this)), token1.balanceOf(address(this))
+        );
+    }
+
+    function removeLiquidity(uint256 _shares)
+        external
+        returns (uint256 amount0, uint256 amount1)
+    {
+        /*
+        Claim
+        dx, dy = amount of liquidity to remove
+        dx = s / T * x
+        dy = s / T * y
+
+        Proof
+        Let's find dx, dy such that
+        v / L = s / T
+
+        where
+        v = f(dx, dy) = sqrt(dxdy)
+        L = total liquidity = sqrt(xy)
+        s = shares
+        T = total supply
+
+        --- Equation 1 ---
+        v = s / T * L
+        sqrt(dxdy) = s / T * sqrt(xy)
+
+        Amount of liquidity to remove must not change price so
+        dx / dy = x / y
+
+        replace dy = dx * y / x
+        sqrt(dxdy) = sqrt(dx * dx * y / x) = dx * sqrt(y / x)
+
+        Divide both sides of Equation 1 with sqrt(y / x)
+        dx = s / T * sqrt(xy) / sqrt(y / x)
+           = s / T * sqrt(x^2) = s / T * x
+
+        Likewise
+        dy = s / T * y
+        */
+
+        // bal0 >= reserve0
+        // bal1 >= reserve1
+        uint256 bal0 = token0.balanceOf(address(this));
+        uint256 bal1 = token1.balanceOf(address(this));
+
+        amount0 = (_shares * bal0) / totalSupply;
+        amount1 = (_shares * bal1) / totalSupply;
+        require(amount0 > 0 && amount1 > 0, "amount0 or amount1 = 0");
+
+        _burn(msg.sender, _shares);
+        _update(bal0 - amount0, bal1 - amount1);
+
+        token0.transfer(msg.sender, amount0);
+        token1.transfer(msg.sender, amount1);
+    }
+
+    function _sqrt(uint256 y) private pure returns (uint256 z) {
+        if (y > 3) {
+            z = y;
+            uint256 x = y / 2 + 1;
+            while (x < z) {
+                z = x;
+                x = (y / x + x) / 2;
+            }
+        } else if (y != 0) {
+            z = 1;
+        } else {
+            z = 0;
+        }
+    }
+
+    function _min(uint256 x, uint256 y) private pure returns (uint256) {
+        return x <= y ? x : y;
+    }
+}
+
+
+```
 
 ## ralph translation
 
@@ -13,112 +258,126 @@ This is a simpler version of the UniswapV2 contract.
   "include_comments": true,
   "mimic_defaults": false,
   "translate_erc20": true,
-  "smart": false
+  "smart": true
 }
 ```
 
 ### Recommended next steps
-1. Implement [IFungibleToken](https://docs.alephium.org/dapps/standards/fungible-tokens/)
-2. Remove balanceOf mapping - Alephium has native support for contract tokens
-3. The initial balance has to be minted to the contract during deployment ([doc](https://docs.alephium.org/dapps/tutorials/first-fungible-token))
-4. Verify that the contract code is correct and that all storage variables are being set correctly
+1. Remove balanceOf mapping - Alephium has native support for contract tokens
+2. The initial balance has to be minted to the contract during deployment ([doc](https://docs.alephium.org/dapps/tutorials/first-fungible-token))
+3. Verify that the contract code is correct and that all storage variables are being set correctly
 
 ### Output code
 
 ```rust
-// Constant Product Automated Market Maker (CPAMM) implementation in Ralph
-// Note: In Alephium, tokens are native and don't require ERC20 interfaces
+// Ralph Translation of IERC20
+// ===========================
+
+// Metadata structure for Fungible Token
+struct FungibleTokenMetadata {
+  mut symbol: ByteVec,
+  mut name: ByteVec,
+  mut decimals: U256,
+  mut totalSupply: U256
+}
+
+@std(id = #0001)
+@using(methodSelector = false)
+Interface IFungibleToken {
+  pub fn getSymbol() -> ByteVec
+
+  pub fn getName() -> ByteVec
+
+  pub fn getDecimals() -> U256
+
+  pub fn getTotalSupply() -> U256
+}
 
 Contract CPAMM(
-  token0: ByteVec,  // Token ID of token0
-  token1: ByteVec,  // Token ID of token1
+  token0: ByteVec,
+  token1: ByteVec,
   mut reserve0: U256,
   mut reserve1: U256,
   mut totalSupply: U256
 ) {
-  // Mapping to track LP token balances
+  // @@@ Solidity's constructor is replaced by initializing immutable fields during contract creation.
   mapping[Address, U256] balanceOf
 
-  // Error codes
   enum ErrorCodes {
-    InvalidToken = 1001
-    ZeroAmount = 1002
-    InvalidRatio = 1003
-    ZeroShares = 1004
-    ZeroOutput = 1005
+    InvalidToken = 0
+    AmountInIsZero
+    InvalidRatio
+    SharesAreZero
+    AmountIsZero
+    InsufficientBalance
   }
 
-  // Internal function to mint LP tokens
-  fn mint(to: Address, amount: U256) -> () {
-    if (balanceOf.contains!(to)) {
+  @using(updateFields = true, preapprovedAssets = true)
+  fn mintShares(to: Address, amount: U256) -> () {
+    // @@@ Solidity mappings return a default value (0); Ralph requires explicit checks and insertion for new keys.
+    if balanceOf.contains!(to) {
       balanceOf[to] = balanceOf[to] + amount
     } else {
-      balanceOf.insert!(to, amount)
+      balanceOf.insert!(callerAddress!(), to, amount)
     }
     totalSupply = totalSupply + amount
   }
 
-  // Internal function to burn LP tokens
-  fn burn(from: Address, amount: U256) -> () {
-    balanceOf[from] = balanceOf[from] - amount
+  @using(updateFields = true)
+  fn burnShares(from: Address, amount: U256) -> () {
+    assert!(balanceOf.contains!(from), ErrorCodes.InsufficientBalance)
+    let balance = balanceOf[from]
+    assert!(balance >= amount, ErrorCodes.InsufficientBalance)
+    balanceOf[from] = balance - amount
     totalSupply = totalSupply - amount
   }
 
-  // Internal function to update reserves
-  fn update(newReserve0: U256, newReserve1: U256) -> () {
-    reserve0 = newReserve0
-    reserve1 = newReserve1
+  @using(updateFields = true)
+  fn updateReserves(reserve0_: U256, reserve1_: U256) -> () {
+    reserve0 = reserve0_
+    reserve1 = reserve1_
   }
 
-  // Swap tokens
-  @using(preapprovedAssets = true, checkExternalCaller = false)
-  pub fn swap(tokenIn: ByteVec, amountIn: U256) -> U256 {
-    // Validate inputs
-    assert!(tokenIn == token0 || tokenIn == token1, ErrorCodes.InvalidToken)
-    assert!(amountIn > 0, ErrorCodes.ZeroAmount)
+  @using(preapprovedAssets = true, assetsInContract = true, updateFields = true)
+  pub fn swap(tokenInId: ByteVec, amountIn: U256) -> U256 {
+    assert!(
+      tokenInId == token0 || tokenInId == token1,
+      ErrorCodes.InvalidToken
+    )
+    assert!(amountIn > 0, ErrorCodes.AmountInIsZero)
 
-    // Determine swap direction
-    let isToken0 = tokenIn == token0
-    let (reserveIn, reserveOut) = if (isToken0) {
-      (reserve0, reserve1)
+    let isToken0 = tokenInId == token0
+    let (tokenOutId, reserveIn, reserveOut) = if isToken0 {
+      (token1, reserve0, reserve1)
     } else {
-      (reserve1, reserve0)
+      (token0, reserve1, reserve0)
     }
 
-    // Calculate output amount with 0.3% fee
+    transferTokenToSelf!(callerAddress!(), tokenInId, amountIn)
+
+    // 0.3% fee
     let amountInWithFee = (amountIn * 997) / 1000
     let amountOut = (reserveOut * amountInWithFee) / (reserveIn + amountInWithFee)
-    assert!(amountOut > 0, ErrorCodes.ZeroOutput)
 
-    // Transfer tokens
-    if (isToken0) {
-      // Transfer token0 from caller to contract
-      transferTokenToSelf!(callerAddress!(), token0, amountIn)
-      // Transfer token1 to caller
-      transferTokenFromSelf!(callerAddress!(), token1, amountOut)
-    } else {
-      // Transfer token1 from caller to contract
-      transferTokenToSelf!(callerAddress!(), token1, amountIn)
-      // Transfer token0 to caller
-      transferTokenFromSelf!(callerAddress!(), token0, amountOut)
-    }
+    transferTokenFromSelf!(callerAddress!(), tokenOutId, amountOut)
 
     // Update reserves
-    let newReserve0 = tokenRemaining!(selfAddress!(), token0)
-    let newReserve1 = tokenRemaining!(selfAddress!(), token1)
-    update(newReserve0, newReserve1)
+    // @@@ Solidity's `balanceOf` is used to sync reserves; Ralph maintains state internally for better security.
+    if isToken0 {
+      updateReserves(reserve0 + amountIn, reserve1 - amountOut)
+    } else {
+      updateReserves(reserve0 - amountOut, reserve1 + amountIn)
+    }
 
     return amountOut
   }
 
-  // Add liquidity to the pool
-  @using(preapprovedAssets = true, checkExternalCaller = false)
+  @using(preapprovedAssets = true, payToContractOnly = true, updateFields = true)
   pub fn addLiquidity(amount0: U256, amount1: U256) -> U256 {
-    // Transfer tokens from caller to contract
     transferTokenToSelf!(callerAddress!(), token0, amount0)
     transferTokenToSelf!(callerAddress!(), token1, amount1)
 
-    // Validate ratio if pool already has liquidity
+    // Check liquidity ratio if reserves exist
     if (reserve0 > 0 || reserve1 > 0) {
       assert!(
         reserve0 * amount1 == reserve1 * amount0,
@@ -127,70 +386,61 @@ Contract CPAMM(
     }
 
     // Calculate shares to mint
-    let shares = if (totalSupply == 0) {
-      sqrt(amount0 * amount1)
+    let mut shares = 0
+    if (totalSupply == 0) {
+      shares = sqrt(amount0 * amount1)
     } else {
-      min(
+      shares = min(
         (amount0 * totalSupply) / reserve0,
         (amount1 * totalSupply) / reserve1
       )
     }
-    assert!(shares > 0, ErrorCodes.ZeroShares)
+    assert!(shares > 0, ErrorCodes.SharesAreZero)
 
-    // Mint LP tokens
-    mint(callerAddress!(), shares)
+    mintShares{callerAddress!() -> token0: amount0, token1: amount1}(callerAddress!(), shares)
 
     // Update reserves
-    let newReserve0 = tokenRemaining!(selfAddress!(), token0)
-    let newReserve1 = tokenRemaining!(selfAddress!(), token1)
-    update(newReserve0, newReserve1)
+    // @@@ Solidity's `balanceOf` is used to sync reserves; Ralph maintains state internally for better security.
+    updateReserves(reserve0 + amount0, reserve1 + amount1)
 
     return shares
   }
 
-  // Remove liquidity from the pool
-  @using(assetsInContract = true, checkExternalCaller = false)
+  @using(assetsInContract = true, updateFields = true)
   pub fn removeLiquidity(shares: U256) -> (U256, U256) {
-    // Calculate amounts to withdraw
-    let bal0 = tokenRemaining!(selfAddress!(), token0)
-    let bal1 = tokenRemaining!(selfAddress!(), token1)
-    let amount0 = (shares * bal0) / totalSupply
-    let amount1 = (shares * bal1) / totalSupply
-    assert!(amount0 > 0 && amount1 > 0, ErrorCodes.ZeroOutput)
+    // @@@ Solidity's `balanceOf` is used to calculate withdrawals; Ralph uses its internal state for reserves.
+    let amount0 = (shares * reserve0) / totalSupply
+    let amount1 = (shares * reserve1) / totalSupply
+    assert!(amount0 > 0 && amount1 > 0, ErrorCodes.AmountIsZero)
 
-    // Burn LP tokens
-    burn(callerAddress!(), shares)
+    burnShares(callerAddress!(), shares)
+    updateReserves(reserve0 - amount0, reserve1 - amount1)
 
-    // Update reserves
-    update(bal0 - amount0, bal1 - amount1)
-
-    // Transfer tokens to caller
     transferTokenFromSelf!(callerAddress!(), token0, amount0)
     transferTokenFromSelf!(callerAddress!(), token1, amount1)
 
     return amount0, amount1
   }
 
-  // Internal function to calculate square root (Babylonian method)
   fn sqrt(y: U256) -> U256 {
+    let mut z = 0
     if (y > 3) {
-      let mut z = y
+      z = y
       let mut x = y / 2 + 1
       while (x < z) {
         z = x
         x = (y / x + x) / 2
       }
-      return z
     } else if (y != 0) {
-      return 1
+      z = 1
     } else {
-      return 0
+      z = 0
     }
+    return z
   }
 
-  // Internal function to find minimum of two values
   fn min(x: U256, y: U256) -> U256 {
-    return if (x <= y) x else y
+    return if x <= y { x } else { y }
   }
 }
 ```

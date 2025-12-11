@@ -161,13 +161,26 @@
           >
             <div
               v-if="consentOpen"
-              class="absolute -translate-y-[100%] -top-[16px] p-3 pl-6 flex gap-x-[10px] bg-[#2A231A] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)]"
+              class="absolute -translate-y-[100%] -top-[16px] p-3 pl-6 w-full flex items-center justify-between gap-x-[10px] bg-[#2A231A] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)]"
             >
               <p
                 class="text-[#EF8510] text-[length:16px] font-semibold leading-6"
               >
                 By clicking <span class="text-[#F3BA7B]">Translate</span>, you
-                consent to <a href="/tos" target="_blank" class="underline text-[#F3BA7B] hover:text-[#EF8510]">Terms of Service</a> and <a href="/privacy" target="_blank" class="underline text-[#F3BA7B] hover:text-[#EF8510]">privacy&nbsp;policy</a>.
+                consent to
+                <a
+                  href="/tos"
+                  target="_blank"
+                  class="underline text-[#F3BA7B] hover:text-[#EF8510]"
+                  >Terms of Service</a
+                >
+                and
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  class="underline text-[#F3BA7B] hover:text-[#EF8510]"
+                  >privacy&nbsp;policy</a
+                >.
               </p>
               <button class="h-fit w-fit" @click="closeConsent">
                 <svg
@@ -306,7 +319,9 @@
                       <Checkbox
                         id="translateERC20"
                         :model-value="options.translateERC20"
-                        @update:model-value="(val) => (options.translateERC20 = Boolean(val))"
+                        @update:model-value="
+                          (val) => (options.translateERC20 = Boolean(val))
+                        "
                         class="custom-checkbox"
                       />
                       <Label for="translateERC20" class="checkbox-label"
@@ -318,7 +333,9 @@
                       <Checkbox
                         id="autoCompile"
                         :model-value="options.autoCompile"
-                        @update:model-value="(val) => (options.autoCompile = Boolean(val))"
+                        @update:model-value="
+                          (val) => (options.autoCompile = Boolean(val))
+                        "
                         class="custom-checkbox"
                       />
                       <Label for="autoCompile" class="checkbox-label"
@@ -329,11 +346,26 @@
                       <Checkbox
                         id="smart"
                         :model-value="options.smart"
-                        @update:model-value="(val) => (options.smart = Boolean(val))"
+                        @update:model-value="
+                          (val) => (options.smart = Boolean(val))
+                        "
                         class="custom-checkbox"
                       />
                       <Label for="smart" class="checkbox-label"
                         >Smarter (thinking)</Label
+                      >
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <Checkbox
+                        id="showGasEstimates"
+                        :model-value="options.showGasEstimates"
+                        @update:model-value="
+                          (val) => (options.showGasEstimates = Boolean(val))
+                        "
+                        class="custom-checkbox"
+                      />
+                      <Label for="showGasEstimates" class="checkbox-label"
+                        >Show gas estimates</Label
                       >
                     </div>
                   </PopoverContent>
@@ -364,38 +396,88 @@
       >
         <h2 class="text-[20px] font-medium text-white">Ralph Output</h2>
         <div
-          class="flex-1 flex flex-col rounded-[12px] p-4 bg-[#191817] sm:p-6 border border-[#6D5D5D] overflow-hidden"
+          class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
-          <div ref="outputContainer" class="flex-1 overflow-auto min-w-0">
-            <pre
-              v-if="outputCode || loading"
-              class="font-menlo text-sm whitespace-pre text-gray-300 w-max"
-            ><code class="hljs !bg-transparent language-rust" :class="{ 'opacity-50': loading }" v-html="highlightedOutput || (loading ? 'Translating...' + (!!loadingStatus ? ` (${loadingStatus})` : '') : '')"></code></pre>
+          <div class="relative flex-1 flex flex-col overflow-hidden">
+            <!-- Progress overlay for fix mode (expanded) -->
             <div
-              v-if="!outputCode && !loading && !errors.length"
-              class="text-gray-500 text-[length:18px] font-menlo"
+              v-if="loading && progressMode === 'fix' && !progressMinimized"
+              class="absolute inset-0 bg-[#242322]/40 backdrop-blur-[2px] z-10"
             >
-              Translation will appear here ✨
+              <TranslationProgress
+                :status-message="loadingStatus"
+                :minimized="false"
+                :mode="progressMode"
+                @toggle-minimize="progressMinimized = true"
+              />
             </div>
-            <!-- Success Display Section -->
-            <section v-if="successMessage && !loading" class="mt-2 p-1">
+            <!-- Minimized progress badge (fix mode) -->
+            <TranslationProgress
+              v-if="loading && progressMode === 'fix' && progressMinimized"
+              :status-message="loadingStatus"
+              :minimized="true"
+              :mode="progressMode"
+              @toggle-minimize="progressMinimized = false"
+            />
+            <!-- Transparent progress overlay for translation (expanded) -->
+            <div
+              v-if="loading && progressMode === 'translate' && !progressMinimized"
+              class="absolute inset-0 bg-[#242322]/40 backdrop-blur-[2px] z-10"
+            >
+              <TranslationProgress
+                :status-message="loadingStatus"
+                :minimized="false"
+                :mode="progressMode"
+                @toggle-minimize="progressMinimized = true"
+              />
+            </div>
+            <!-- Minimized progress badge (translation only) -->
+            <TranslationProgress
+              v-if="loading && progressMode === 'translate' && progressMinimized"
+              :status-message="loadingStatus"
+              :minimized="true"
+              :mode="progressMode"
+              @toggle-minimize="progressMinimized = false"
+            />
+            <div
+              ref="outputContainer"
+              class="flex-1 overflow-auto custom-scrollbar"
+            >
+              <!-- Show streaming code output during loading -->
+              <CodeViewerWithAnnotations 
+                v-if="outputCode" 
+                :code="outputCode" 
+                :loading="loading"
+                :gas-annotations="gasLineAnnotations"
+                :minimal-gas="gasResponse?.minimal_gas ?? 20000"
+                @update:line-map="handleLineMapUpdate"
+              />
               <div
-                class="text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+                v-if="!outputCode && !loading && !errors.length"
+                class="text-gray-500 text-[length:18px] font-menlo"
               >
-                <ul>
-                  <li class="font-mono text-xs">{{ successMessage }}</li>
-                </ul>
+                Translation will appear here ✨
               </div>
-            </section>
-            <!-- Error Display Section (Integrated into Output Panel) -->
-            <section v-if="errors.length > 0 && !loading" class="mt-2 p-1">
-              <div
-                :class="[
-                  'text-[#E15959] border-[#E15959] bg-[#2A1A1A]',
-                  'text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto',
-                ]"
-              >
-                <ul>
+              <!-- Success Display Section -->
+              <section v-if="successMessage && !loading" class="mt-2 p-1">
+                <div
+                  class="absolute bottom-0 left-0 right-0 text-green-400 border-green-400 bg-[#1A2A1A] text-[length:16px] font-semibold rounded-[10px] py-3 px-6 border shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] max-h-32 overflow-y-auto"
+                >
+                  <ul>
+                    <li class="font-mono text-xs">{{ successMessage }}</li>
+                  </ul>
+                </div>
+              </section>
+            </div>
+            <!-- Error Display Section (Pinned to bottom with close button) -->
+            <div
+              v-if="errors.length > 0 && !loading && errorsOpen"
+              class="absolute bottom-0 left-0 right-0 p-3 pl-6 flex gap-x-[10px] bg-[#2A1A1A] rounded-[10px] border border-[#E15959] shadow-[0_0_6px_1px_rgba(225,89,89,0.70)]"
+            >
+              <div class="flex-1 max-h-32 overflow-y-auto">
+                <ul
+                  class="text-[#E15959] text-[length:16px] font-semibold leading-6"
+                >
                   <li
                     v-for="(error, index) in errors"
                     :key="index"
@@ -405,7 +487,31 @@
                   </li>
                 </ul>
               </div>
-            </section>
+              <button class="h-fit w-fit" @click="closeErrors">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="21"
+                  viewBox="0 0 20 21"
+                  fill="none"
+                >
+                  <path
+                    d="M15 5.34399L5 15.344"
+                    stroke="#E15959"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M5 5.34399L15 15.344"
+                    stroke="#E15959"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
           <div
             v-if="outputCode && !loading"
@@ -470,7 +576,8 @@
         Looking to build innovative blockchain products?
       </h2>
       <p class="text-white text-[length:16px] mb-[36px] text-center">
-        Discover our cutting-edge suite of web3 and AI solutions designed for developers and blockchain innovators.
+        Discover our cutting-edge suite of web3 and AI solutions designed for
+        developers and blockchain innovators.
       </p>
       <a
         href="https://blockchain-collab.com/alephium"
@@ -535,7 +642,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from "vue";
+import { ref, watch, nextTick, onMounted, computed } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { createError, useRuntimeConfig } from "#imports";
 import hljs from "highlight.js/lib/core";
@@ -551,8 +658,12 @@ import { Label } from "@/components/ui/label";
 import {
   translateCode as apiTranslateCode,
   compileTranslatedCode as apiCompileTranslatedCode,
+  fixRalphCode,
 } from "@/lib/api";
 import type { PreviousTranslation } from "@/lib/api";
+import CodeViewerWithAnnotations from "@/components/CodeViewerWithAnnotations.vue";
+import TranslationProgress from "@/components/TranslationProgress.vue";
+import { useGasEstimation } from "@/composables/useGasEstimation";
 
 hljs.registerLanguage("rust", rust);
 
@@ -561,7 +672,7 @@ const sourceCode = ref("");
 const outputCode = ref(``);
 const highlightedOutput = ref("");
 const loading = ref(false);
-const loadingStatus = ref(0);
+const loadingStatus = ref("");
 const compiled = ref(false);
 const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
@@ -571,18 +682,43 @@ const options = ref({
   optimize: false,
   includeComments: true,
   mimicDefaults: false,
-  translateERC20: false, // new option for ERC20 translation
+  translateERC20: true, // new option for ERC20 translation
   // peripheral options
   autoCompile: false,
-  smart: false, // not implemented yet
+  smart: false,
+  showGasEstimates: true, // show gas cost annotations
 });
 const copied = ref(false);
 const isScrolled = ref(false);
 const consentOpen = ref(true);
+const errorsOpen = ref(true);
+const progressMinimized = ref(false);
+const progressMode = ref<"translate" | "fix">("translate");
 const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 const outputContainer = ref<HTMLElement | null>(null);
 
 const runtimeConfig = useRuntimeConfig();
+
+// Gas estimation composable
+const showGasEstimatesRef = computed(() => options.value.showGasEstimates);
+const {
+  lineAnnotations: gasLineAnnotations,
+  response: gasResponse,
+  loading: gasLoading,
+  estimate: estimateGas,
+  updateLineMapping,
+} = useGasEstimation({
+  code: outputCode,
+  apiBase: runtimeConfig.public.apiBase,
+  enabled: showGasEstimatesRef,
+  debounceMs: 1500,
+});
+
+// Handle line mapping updates from CodeViewerWithAnnotations
+// This adjusts gas line numbers when // @@@ annotation lines are removed
+const handleLineMapUpdate = (lineMap: Map<number, number>) => {
+  updateLineMapping(lineMap);
+};
 
 const handleScroll = (event: Event) => {
   // turn in on once animations are added
@@ -668,12 +804,21 @@ const closeConsent = () => {
   consentOpen.value = false;
 };
 
-const translateCodeInner = async (initialOutputCode: string, previousTranslation?: PreviousTranslation) => {
+const closeErrors = () => {
+  errorsOpen.value = false;
+};
+
+const translateCodeInner = async (
+  initialOutputCode: string,
+  previousTranslation?: PreviousTranslation
+) => {
   loading.value = true;
-  loadingStatus.value = 0;
+  loadingStatus.value = "";
   compiled.value = false;
   errors.value = [];
+  errorsOpen.value = true;
   successMessage.value = null;
+  progressMinimized.value = false;
   await apiTranslateCode({
     sourceCode: sourceCode.value,
     options: options.value,
@@ -681,8 +826,8 @@ const translateCodeInner = async (initialOutputCode: string, previousTranslation
     previousTranslation,
     initialOutputCode,
     setOutputCode: (val: string) => (outputCode.value = val),
-    setLoadingStatus: (val: number) => (loadingStatus.value = val),
-    setErrors: (val: string[]) => (errors.value = val)
+    setLoadingStatus: (val: string) => (loadingStatus.value = val),
+    setErrors: (val: string[]) => (errors.value = val),
   });
   loading.value = false;
   if (options.value.autoCompile && errors.value.length === 0) {
@@ -748,20 +893,62 @@ const compileTranslatedCode = async () => {
 
 const upgradeTranslatedCode = async () => {
   upgradeCounter.value++;
-  let code = ""
-  if (upgradeCounter.value == 3) {
-    code += "// Not all EVM features are supported on Alephium\n"
-    code += "// In some cases compiler error messages may not be sufficient to debug the issue\n"
-    code += "// If you encounter problems, see supported features on GitHub or try building locally\n"
+  
+  // Use the fix API instead of retranslating from scratch
+  if (errors.value.length === 0) {
+    return; // No errors to fix
   }
-  return translateCodeInner(
-    code,
-    {
-      source_code: outputCode.value,
-      warnings: [],
-      errors: errors.value,
+
+  loading.value = true;
+  progressMode.value = "fix"; // Set fix mode
+  loadingStatus.value = "🔍 Analysing the error...";
+  compiled.value = false;
+  successMessage.value = null;
+
+  try {
+    const result = await fixRalphCode({
+      ralphCode: outputCode.value,
+      error: errors.value.join("\n"),
+      solidityCode: sourceCode.value,
+      runtimeConfig,
+      onStageUpdate: (stage, message) => {
+        loadingStatus.value = message;
+      },
+    });
+
+    outputCode.value = result.fixedCode;
+    errors.value = [];
+    
+    if (result.success) {
+      // compiled.value = true;
+      successMessage.value = `Code fixed and compiled successfully in ${result.iterations} iteration(s)!`;
+    } else {
+      // Auto-compile to check if there are remaining errors
+      if (options.value.autoCompile) {
+        await compileTranslatedCode();
+      }
     }
-  )
+  } catch (e: any) {
+    console.error("Fix error:", e);
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    errors.value = [errorMessage];
+    
+    // Fallback to retranslation if fix API fails
+    if (upgradeCounter.value >= 3) {
+      progressMode.value = "translate"; // Switch back to translate mode
+      let code = "// Not all EVM features are supported on Alephium\n";
+      code += "// In some cases compiler error messages may not be sufficient to debug the issue\n";
+      code += "// If you encounter problems, see supported features on GitHub or try building locally\n";
+      return translateCodeInner(code, {
+        source_code: outputCode.value,
+        warnings: [],
+        errors: errors.value,
+      });
+    }
+  } finally {
+    loading.value = false;
+    progressMode.value = "translate"; // Reset to translate mode after completion
+  }
 };
 </script>
 
@@ -776,6 +963,25 @@ textarea {
 }
 
 /* Custom scrollbar styling (optional, for a more polished look) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #312f2d;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #9e9992;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #e5ded7;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

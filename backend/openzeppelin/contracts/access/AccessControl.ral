@@ -1,0 +1,116 @@
+Abstract Contract AccessControl() implements IAccessControl {
+  // Mappings to simulate nested structure
+  // For hasRole: key is encodeToByteVec!(role, account), value is Bool
+  mapping[ByteVec, Bool] hasRole_
+  // For adminRole: key is role, value is adminRole
+  mapping[ByteVec, ByteVec] adminRole_
+
+  // Constant
+  const DefaultAdminRole = #0000000000000000000000000000000000000000000000000000000000000000
+
+  // Error codes for custom errors
+  const AccessControlUnauthorizedAccount = 1
+  const AccessControlBadConfirmation = 2
+  // Error when role is not 32 bytes long
+  const AccessControlInvalidRoleLength = 3
+
+  // Helper function to get hasRole key
+  fn getHasRoleKey(role: ByteVec, account: Address) -> ByteVec {
+    return encodeToByteVec!(role, account)
+  }
+
+  // Validate role length is exactly 32 bytes.
+  fn ensureRoleIs32(role: ByteVec) -> () {
+    if (size!(role) != 32) {
+      panic!(AccessControlInvalidRoleLength)
+    }
+  }
+
+  // Public function to check if account has role
+  pub fn hasRole(role: ByteVec, account: Address) -> Bool {
+    let key = getHasRoleKey(role, account)
+    if (hasRole_.contains!(key)) {
+      return hasRole_[key]
+    } else {
+      return false
+    }
+  }
+
+  // Internal function to check role (equivalent to _checkRole)
+  fn checkRole(role: ByteVec) -> () {
+    checkRoleWithAccount(role, externalCallerAddress!())
+  }
+
+  // Internal function to check role with specific account
+  fn checkRoleWithAccount(role: ByteVec, account: Address) -> () {
+    if (!hasRole(role, account)) {
+      // Emit error event or handle as needed, but since Ralph uses assert!, we'll panic
+      panic!(AccessControlUnauthorizedAccount)
+    }
+  }
+
+  // Public function to get role admin
+  pub fn getRoleAdmin(role: ByteVec) -> ByteVec {
+    if (adminRole_.contains!(role)) {
+      return adminRole_[role]
+    } else {
+      return DefaultAdminRole
+    }
+  }
+
+  // Public function to grant role
+  pub fn grantRole(role: ByteVec, account: Address) -> () {
+    let adminRole = getRoleAdmin(role)
+    checkRole(adminRole)
+    let _ = grantRoleInternal(role, account)
+  }
+
+  // Public function to revoke role
+  pub fn revokeRole(role: ByteVec, account: Address) -> () {
+    let adminRole = getRoleAdmin(role)
+    checkRole(adminRole)
+    let _ = revokeRoleInternal(role, account)
+  }
+
+  // Public function to renounce role
+  pub fn renounceRole(role: ByteVec, account: Address) -> () {
+    checkCaller!(externalCallerAddress!() == account, AccessControlBadConfirmation)
+    let _ = revokeRoleInternal(role, account)
+  }
+
+  // Internal function to set role admin
+  @using(updateFields = true)
+  fn setRoleAdmin(role: ByteVec, adminRole: ByteVec) -> () {
+    // Ensure provided role has correct length before creating/setting admin
+    ensureRoleIs32(role)
+    let previousAdminRole = getRoleAdmin(role)
+    adminRole_[role] = adminRole
+    emit RoleAdminChanged(role, previousAdminRole, adminRole)
+  }
+
+  // Internal function to grant role
+  fn grantRoleInternal(role: ByteVec, account: Address) -> Bool {
+    // When creating/granting a role ensure the role identifier is 32 bytes
+    ensureRoleIs32(role)
+    if (!hasRole(role, account)) {
+      let key = getHasRoleKey(role, account)
+      hasRole_.insert!(key, true)
+      emit RoleGranted(role, account, externalCallerAddress!())
+      return true
+    } else {
+      return false
+    }
+  }
+
+  // Internal function to revoke role
+  fn revokeRoleInternal(role: ByteVec, account: Address) -> Bool {
+    if (hasRole(role, account)) {
+      let key = getHasRoleKey(role, account)
+      hasRole_.remove!(key)
+      emit RoleRevoked(role, account, externalCallerAddress!())
+      return true
+    } else {
+      return false
+    }
+  }
+}

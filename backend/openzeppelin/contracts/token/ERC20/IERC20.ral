@@ -1,0 +1,22 @@
+// Ralph Translation of IERC20
+// ===========================
+
+// Metadata structure for Fungible Token
+struct FungibleTokenMetadata {
+  mut symbol: ByteVec,
+  mut name: ByteVec,
+  mut decimals: U256,
+  mut totalSupply: U256
+}
+
+@std(id = #0001)
+@using(methodSelector = false)
+Interface IFungibleToken {
+  pub fn getSymbol() -> ByteVec
+
+  pub fn getName() -> ByteVec
+
+  pub fn getDecimals() -> U256
+
+  pub fn getTotalSupply() -> U256
+}

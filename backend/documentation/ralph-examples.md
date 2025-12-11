@@ -1,74 +1,5 @@
 # Ralph Examples
 
-## Ralph NFT
-```ralph
-import "std/nft_interface"
-
-Contract NFT(
-  tokenUri: ByteVec,
-  collectionId: ByteVec,
-  nftIndex: U256
-) implements INFT {
-  pub fn getTokenUri() -> ByteVec {
-    return tokenUri
-  }
-
-  pub fn getNFTIndex() -> U256 {
-    return nftIndex
-  }
-
-  pub fn getCollectionIndex() -> (ByteVec, U256) {
-    return collectionId, nftIndex
-  }
-}
-```
-
-## Ralph NFT Collection
-```ralph
-import "std/nft_collection_interface"
-
-Abstract Contract NFTCollectionBase(
-    collectionUri: ByteVec,
-    collectionOwner: Address,
-    mut totalSupply: U256
-) implements INFTCollection {
-    enum ErrorCodes {
-        NFTNotFound = 0
-        CollectionOwnerAllowedOnly = 1
-        NFTNotPartOfCollection = 2
-    }
-
-    pub fn getCollectionUri() -> ByteVec {
-        return collectionUri
-    }
-
-    pub fn totalSupply() -> U256 {
-        return totalSupply
-    }
-
-    @using(checkExternalCaller = false)
-    pub fn nftByIndex(index: U256) -> INFT {
-        let nftTokenId = subContractId!(toByteVec!(index))
-        assert!(contractExists!(nftTokenId), ErrorCodes.NFTNotFound)
-
-        return INFT(nftTokenId)
-    }
-
-    @using(assetsInContract = true)
-    pub fn withdraw(to: Address, amount: U256) -> () {
-        checkCaller!(callerAddress!() == collectionOwner, ErrorCodes.CollectionOwnerAllowedOnly)
-        transferTokenFromSelf!(to, ALPH, amount)
-    }
-
-    @using(checkExternalCaller = false)
-    pub fn validateNFT(nftId: ByteVec, nftIndex: U256) -> () {
-      let expectedTokenContract = nftByIndex(nftIndex)
-      assert!(nftId == contractId!(expectedTokenContract), ErrorCodes.NFTNotPartOfCollection)
-    }
-}
-```
-
-
 ## Oracle
 Alephium supports 2 native oracles:
 - `IDIAOracle` (price oracle)
@@ -134,24 +65,28 @@ Contract RandomnessFetcher(
 In Ralph a contract can only extend an `Abstract Contract`. The fields in the parent contract must match exactly the fields in the child contract. The child contract can add additional fields, but cannot remove or change the existing ones. Multiple inheritance is supported as well but methods cannot overlap and child cannot override parent methods.
 
 ```ralph
-Abstract Contract ParentContract(
+struct ParentMetadata {
   field1: U256,
   field2: ByteVec
+}
+
+Abstract Contract ParentContract(
+  mut parentMetadata: ParentMetadata
 ) {
   pub fn getField1() -> U256 {
-    return field1
+    return parentMetadata.field1
   }
 
   pub fn getField2() -> ByteVec {
-    return field2
+    return parentMetadata.field2
   }
 }
 
-Abstract Contract ParentContract2(
-  field3: Address
+Abstract Contract Baz(
+  fieldOmega: Address
 ) {
-  pub fn getField3() -> Address {
-    return field3
+  pub fn getFieldOmega() -> Address {
+    return fieldOmega
   }
 }
 
@@ -166,10 +101,9 @@ Abstract Contract Math() {
 }
 
 Contract ChildContract(
-  field1: U256,
-  field2: ByteVec,
   field3: Address
-) extends ParentContract(field1, field2), ParentContract2(field3), Math() {
+  mut parentMetadata: ParentMetadata,
+) extends ParentContract(parentMetadata), Baz(field3), Math() {
   pub fn sumAndDiff(a: U256, b: U256) -> (U256, U256) {
     let sum = add(a, b)
     let diff = sub(a, b)

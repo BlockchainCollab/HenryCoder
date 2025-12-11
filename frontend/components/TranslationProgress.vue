@@ -1,0 +1,423 @@
+<template>
+  <!-- Minimized Mode -->
+  <div
+    v-if="minimized"
+    @click="$emit('toggle-minimize')"
+    class="absolute bottom-4 right-4 flex items-center gap-3 px-4 py-2 rounded-full bg-[#312F2D] border border-[#FF8A00] shadow-[0_0_10px_2px_rgba(239,133,16,0.4)] cursor-pointer hover:shadow-[0_0_14px_3px_rgba(239,133,16,0.6)] transition-all duration-300 z-20"
+    role="button"
+    aria-label="Expand progress indicator"
+  >
+    <!-- Pulsing dot -->
+    <div class="relative">
+      <div class="w-3 h-3 rounded-full bg-[#FF8A00] animate-pulse"></div>
+      <div class="absolute inset-0 w-3 h-3 rounded-full bg-[#FF8A00] animate-ping opacity-75"></div>
+    </div>
+    <!-- Status text -->
+    <span class="text-sm font-medium text-[#E5DED7] truncate max-w-[150px]">
+      {{ currentStageLabel }}
+    </span>
+    <!-- Expand icon -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      class="h-4 w-4 text-[#FF8A00]"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M5 15l7-7 7 7"
+      />
+    </svg>
+  </div>
+
+  <!-- Expanded Mode -->
+  <div v-else class="flex flex-col items-center justify-center h-full py-12 relative">
+    <!-- Minimize button -->
+    <button
+      @click="$emit('toggle-minimize')"
+      class="absolute top-4 right-4 p-2 rounded-full bg-[#312F2D] border border-[#4C4B4B] hover:border-[#FF8A00] text-[#9E9992] hover:text-[#FF8A00] transition-all duration-200 z-20"
+      aria-label="Minimize progress indicator"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-5 w-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M19 9l-7 7-7-7"
+        />
+      </svg>
+    </button>
+
+    <!-- Henry Robot Animation -->
+    <div class="mb-8 relative">
+      <div class="w-32 h-32 relative animate-bounce-slow">
+        <!-- Robot Icon with Coding Animation -->
+        <div class="absolute inset-0 flex items-center justify-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 200 200"
+            class="w-full h-full"
+          >
+            <!-- Robot Body -->
+            <rect
+              x="60"
+              y="80"
+              width="80"
+              height="90"
+              rx="8"
+              fill="#FF8A00"
+              class="animate-pulse-subtle"
+            />
+            <!-- Robot Head -->
+            <rect x="70" y="50" width="60" height="50" rx="8" fill="#FBA444" />
+            <!-- Eyes -->
+            <circle
+              cx="85"
+              cy="70"
+              r="6"
+              fill="#191817"
+              class="animate-blink"
+            />
+            <circle
+              cx="115"
+              cy="70"
+              r="6"
+              fill="#191817"
+              class="animate-blink"
+            />
+            <!-- Antenna -->
+            <line
+              x1="100"
+              y1="50"
+              x2="100"
+              y2="35"
+              stroke="#FF8A00"
+              stroke-width="3"
+            />
+            <circle
+              cx="100"
+              cy="30"
+              r="5"
+              fill="#FF8A00"
+              class="animate-ping-slow"
+            />
+            <!-- Arms -->
+            <rect x="45" y="95" width="15" height="40" rx="4" fill="#FBA444" />
+            <rect x="140" y="95" width="15" height="40" rx="4" fill="#FBA444" />
+            <!-- Coding symbols -->
+            <text
+              x="75"
+              y="110"
+              font-family="monospace"
+              font-size="16"
+              fill="#191817"
+              class="animate-typing"
+            >
+              &lt;/&gt;
+            </text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Floating code symbols -->
+      <div
+        class="absolute -top-4 -right-4 text-[#FF8A00] text-2xl animate-float"
+      >
+        { }
+      </div>
+      <div
+        class="absolute -bottom-4 -left-4 text-[#FBA444] text-2xl animate-float-delayed"
+      >
+        [ ]
+      </div>
+    </div>
+
+    <!-- Stage Label -->
+    <div class="text-center mb-6">
+      <h3 class="text-xl font-semibold text-[#E5DED7] mb-2">
+        {{ currentStageLabel }}
+      </h3>
+      <!-- <p class="text-sm text-[#9E9992]">
+        {{ statusMessage }}
+      </p> -->
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="w-full max-w-md">
+      <div class="h-2 bg-[#312F2D] rounded-full overflow-hidden">
+        <div
+          class="h-full bg-gradient-to-r from-[#FF8A00] to-[#FBA444] rounded-full transition-all duration-500 ease-out"
+          :style="{ width: `${progress}%` }"
+        >
+          <div
+            class="h-full w-full bg-gradient-to-r from-transparent via-white to-transparent opacity-50 animate-shimmer"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Stage Indicators -->
+      <div class="flex justify-between mt-4 text-xs">
+        <div
+          v-for="(stage, index) in stages"
+          :key="stage.id"
+          class="flex flex-col items-center"
+          :class="[currentStage >= index ? 'text-[#FF8A00]' : 'text-[#9E9992]']"
+        >
+          <div
+            class="w-8 h-8 rounded-full border-2 flex items-center justify-center mb-1 transition-all duration-300"
+            :class="[
+              currentStage > index
+                ? 'bg-[#FF8A00] border-[#FF8A00] text-[#191817]'
+                : currentStage === index
+                ? 'border-[#FF8A00] text-[#FF8A00] animate-pulse'
+                : 'border-[#9E9992] text-[#9E9992]',
+            ]"
+          >
+            <svg
+              v-if="currentStage > index"
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <span v-else class="text-xs font-bold">{{ index + 1 }}</span>
+          </div>
+          <span class="text-center max-w-[80px]">{{ stage.label }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from "vue";
+
+interface Props {
+  statusMessage: string;
+  minimized?: boolean;
+  mode?: "translate" | "fix";
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  minimized: false,
+  mode: "translate",
+});
+
+defineEmits<{
+  (e: 'toggle-minimize'): void;
+}>();
+
+// Translation mode stages
+const translateStages = [
+  { id: "thinking", label: "Thinking", keywords: ["thinking", "analyzing"] },
+  {
+    id: "reading",
+    label: "Reading Code",
+    keywords: ["reading", "detecting", "generating", "processing"],
+  },
+  {
+    id: "resolving",
+    label: "Resolving Imports",
+    keywords: ["resolving", "resolve_solidity_imports", "preparing tools"],
+  },
+  {
+    id: "translating",
+    label: "Translating",
+    keywords: ["translating", "translate_evm_to_ralph"],
+  },
+];
+
+// Fix mode stages - 5 stages: analyse + 3 iterations + complete
+const fixStages = [
+  { id: "analysing", label: "Analysing Error", keywords: ["analysing", "🔍"] },
+  { id: "fixing1", label: "Fix Attempt 1", keywords: ["iteration 1"] },
+  { id: "fixing2", label: "Fix Attempt 2", keywords: ["iteration 2"] },
+  { id: "fixing3", label: "Fix Attempt 3", keywords: ["iteration 3"] },
+  { id: "complete", label: "Complete", keywords: ["✅", "complete", "⚠️", "done"] },
+];
+
+// Select stages based on mode
+const stages = computed(() => {
+  return props.mode === "fix" ? fixStages : translateStages;
+});
+
+// Detect current stage based on status message
+const currentStage = computed(() => {
+  const message = props.statusMessage.toLowerCase();
+  const currentStages = stages.value;
+  
+  // For fix mode, check stages in reverse order (most advanced first)
+  if (props.mode === "fix") {
+    if (message.includes("✅") || message.includes("complete") || message.includes("⚠️") || message.includes("done")) {
+      return 4; // Complete stage
+    }
+    if (message.includes("iteration 3") || message.includes("3/3")) {
+      return 3; // Fix attempt 3
+    }
+    if (message.includes("iteration 2") || message.includes("2/3")) {
+      return 2; // Fix attempt 2
+    }
+    if (message.includes("iteration 1") || message.includes("1/3") || message.includes("🔧")) {
+      return 1; // Fix attempt 1
+    }
+    if (message.includes("🔍") || message.includes("analysing")) {
+      return 0; // Analysing stage
+    }
+    return 0;
+  }
+  
+  // For translate mode, use keyword matching
+  for (let i = currentStages.length - 1; i >= 0; i--) {
+    const stage = currentStages[i];
+    if (stage && stage.keywords.some((keyword) => message.includes(keyword))) {
+      return i;
+    }
+  }
+
+  return 0; // Default to first stage
+});
+
+const currentStageLabel = computed(() => {
+  return stages.value[currentStage.value]?.label || "Processing";
+});
+
+// Calculate progress (0-100)
+const progress = computed(() => {
+  const stageProgress = (currentStage.value / (stages.value.length - 1)) * 100;
+  return Math.min(Math.max(stageProgress, 10), 95); // Keep between 10-95% while processing
+});
+</script>
+
+<style scoped>
+@keyframes bounce-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes blink {
+  0%,
+  90%,
+  100% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 0;
+  }
+}
+
+@keyframes ping-slow {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes typing {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(5deg);
+  }
+}
+
+@keyframes float-delayed {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-5deg);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 2s ease-in-out infinite;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+.animate-blink {
+  animation: blink 3s ease-in-out infinite;
+}
+
+.animate-ping-slow {
+  animation: ping-slow 2s ease-in-out infinite;
+}
+
+.animate-typing {
+  animation: typing 1.5s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 3s ease-in-out infinite 1s;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+</style>

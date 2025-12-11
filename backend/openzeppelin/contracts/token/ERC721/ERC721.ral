@@ -1,0 +1,246 @@
+// Ralph Translation of ERC721
+// ============================
+//
+// In Alephium/Ralph, NFTs are implemented using a Collection + Sub-contract pattern.
+// Unlike Ethereum where ERC721 uses mappings to track ownership in a single contract,
+// Alephium creates each NFT as its own sub-contract of a collection.
+//
+// Key differences:
+// 1. NFTs are sub-contracts with their own contract IDs (like unique tokens)
+// 2. Ownership is tracked by who holds the NFT's token (UTXO model)
+// 3. Collection metadata is stored in the parent contract
+// 4. Each NFT has its own tokenUri and index within the collection
+// 5. Transfers are native blockchain operations, not contract storage updates
+// 6. Approvals are per-transaction using brace syntax, eliminating approve/allowance patterns
+
+// =============================================================================
+// NFT CONTRACT (Individual NFT - replaces tokenId concept)
+// =============================================================================
+struct NFTMetadata {
+  mut tokenUri: ByteVec,
+  mut collectionId: ByteVec,
+  mut nftIndex: U256
+}
+
+Contract NFT(
+  mut nftMetadata: NFTMetadata
+) implements INFT {
+  // Event for metadata updates (like ERC4906)
+  event MetadataUpdate(tokenId: U256)
+
+  const NFTNotAuthorized = 72100
+
+  pub fn getTokenUri() -> ByteVec {
+    return nftMetadata.tokenUri
+  }
+
+  pub fn getNFTIndex() -> U256 {
+    return nftMetadata.nftIndex
+  }
+
+  pub fn getCollectionIndex() -> (ByteVec, U256) {
+    return nftMetadata.collectionId, nftMetadata.nftIndex
+  }
+
+  // =========================================================================
+  // setTokenURI (equivalent to _setTokenURI in ERC721URIStorage)
+  // =========================================================================
+  // If ERC721URIStorage.sol is requested - the concrete NFTCollection implementation should call nft.setTokenURI(newUri)
+  // @@@ In Ralph, this requires calling the NFT sub-contract directly.
+  @using(updateFields = true)
+  pub fn setTokenURI(newUri: ByteVec) -> () {
+    checkCaller!(callerContractId!() == nftMetadata.collectionId, NFTNotAuthorized)
+    nftMetadata.tokenUri = newUri
+    emit MetadataUpdate(nftMetadata.nftIndex)
+  }
+
+  // =========================================================================
+  // burnToken() (equivalent to _burn in ERC721)
+  // =========================================================================
+  // Destroys this NFT sub-contract permanently.
+  // @@@ In Ralph, burning an NFT means destroying its sub-contract.
+  @using(preapprovedAssets = true, checkExternalCaller = false, assetsInContract = true)
+  pub fn burn(refundAddress: Address, tokenOwner: Address) -> () {
+    // burn the NFT token from the owner to prove ownership
+    burnToken!(tokenOwner, selfTokenId!(), 1)
+    // Now the NFT contract holds the token - can self destroy
+    destroySelf!(refundAddress)
+  }
+}
+
+// =============================================================================
+// NFT COLLECTION CONTRACT (replaces ERC721 contract with ownership mappings)
+// =============================================================================
+struct NFTCollectionMetadata {
+  mut collectionUri: ByteVec,
+  mut name: ByteVec,
+  mut symbol: ByteVec,
+  mut totalSupply: U256
+}
+
+// This is a base contract with all necessary methods, client must implement the concrete contract and inherit NFTCollectionBase
+Abstract Contract NFTCollectionBase(
+  nftTemplateId: ByteVec,
+  mut nftcollectionMetadata: NFTCollectionMetadata
+) implements INFTCollection {
+  const NFTCollectionNFTNotFound = 72110
+  const NFTCollectionCollectionOwnerAllowedOnly = 72111
+  const NFTCollectionNFTNotPartOfCollection = 72112
+  
+
+  // =========================================================================
+  // SUPPORTED FUNCTIONS (INFTCollection interface)
+  // =========================================================================
+
+  // Returns the collection URI (similar to baseURI in ERC721)
+  pub fn getCollectionUri() -> ByteVec {
+    return nftcollectionMetadata.collectionUri
+  }
+
+  // Returns the total number of NFTs minted in this collection
+  pub fn totalSupply() -> U256 {
+    return nftcollectionMetadata.totalSupply
+  }
+
+  // Returns the NFT contract at a given index
+  // @@@ In Ralph, each NFT is a sub-contract derived from the collection
+  @using(checkExternalCaller = false)
+  pub fn nftByIndex(index: U256) -> INFT {
+    let nftTokenId = subContractId!(toByteVec!(index))
+    assert!(contractExists!(nftTokenId), NFTCollectionNFTNotFound)
+    return INFT(nftTokenId)
+  }
+
+  // @@@ Additional metadata functions (equivalent to IERC721Metadata)
+  pub fn getName() -> ByteVec {
+    return nftcollectionMetadata.name
+  }
+
+  pub fn getSymbol() -> ByteVec {
+    return nftcollectionMetadata.symbol
+  }
+
+  // Validate that an NFT belongs to this collection
+  @using(checkExternalCaller = false)
+  pub fn validateNFT(nftId: ByteVec, nftIndex: U256) -> () {
+    let expectedTokenContract = nftByIndex(nftIndex)
+    assert!(nftId == contractId!(expectedTokenContract), NFTCollectionNFTNotPartOfCollection)
+  }
+
+  // @@@ Ralph supports URIs out of the box, this method allows compatibility with ERC721URIStorage
+  pub fn getTokenURI(nftIndex: U256) -> ByteVec {
+    let nft = nftByIndex(nftIndex)
+    return nft.getTokenUri()
+  }
+
+  // =========================================================================
+  // INTERNAL MINTING (replaces _mint/_safeMint)
+  // =========================================================================
+
+  // The NFT's contract ID is deterministically derived from the index
+  // @@@ In Ralph, minting creates a new sub-contract for the NFT
+  @using(updateFields = true)
+  fn innerMint(to: Address, tokenUri: ByteVec) -> ByteVec {
+    let index = nftcollectionMetadata.totalSupply
+    let (encodedImmFields, encodedMutFields) = NFT.encodeFields!(
+      NFTMetadata{
+        tokenUri: tokenUri,
+        collectionId: selfContractId!(),
+        nftIndex: index
+      }
+    )
+    
+    // Create sub-contract with index as path
+    let nftContractId = copyCreateSubContractWithToken!(
+      toByteVec!(index),
+      nftTemplateId,
+      encodedImmFields,
+      encodedMutFields,
+      1,              // Issue 1 token (the NFT)
+      to              // Token goes to recipient
+    )
+    
+    nftcollectionMetadata.totalSupply = nftcollectionMetadata.totalSupply + 1
+    return nftContractId
+  }
+
+  // @@@ Ralph requires to pass tokenOwner in brace notation and as parameter. The refund address is where ALPH storage deposit will go.
+  @using(preapprovedAssets = true, checkExternalCaller = false)
+  fn innerBurn(nftIndex: U256, refundAddress: Address, tokenOwner: Address) -> () {
+    let nft = NFT(contractId!(nftByIndex(nftIndex)))
+    nft.burn{tokenOwner -> tokenId!(nft): 1}(refundAddress, tokenOwner)
+  }
+
+  // @@@ Ralph supports URIs out of the box, this method allows compatibility with ERC721URIStorage
+  fn innerSetTokenURI(nftIndex: U256, newUri: ByteVec) -> () {
+    let nft = NFT(contractId!(nftByIndex(nftIndex)))
+    nft.setTokenURI(newUri)
+  }
+}
+
+// =============================================================================
+// ERC721 EVENTS - NOT NEEDED IN RALPH - the chain tracks all token movements.
+// =============================================================================
+//
+// @@@ In Ralph, NFT transfers are native UTXO operations tracked by the blockchain.
+// event Transfer(from, to, tokenId)
+//
+// @@@ Ralph uses per-transaction approvals via brace syntax. No persistent approvals.
+// event Approval(owner, approved, tokenId)
+//
+// @@@ No operator approval concept - each transfer requires explicit approval in the tx.
+// event ApprovalForAll(owner, operator, approved)
+
+// =============================================================================
+// UNSUPPORTED FUNCTIONS (Different paradigm in Ralph)
+// =============================================================================
+
+// @@@ Ralph doesn't store balances in contract; they're in UTXOs queried externally via REST API or indexer.
+// UNSUPPORTED: function balanceOf(address owner) external view returns (uint256)
+
+// @@@ NFT ownership is tracked by who holds the NFT's token. The NFT is a sub-contract, and ownership means holding its issued token.
+// UNSUPPORTED: function ownerOf(uint256 tokenId) external view returns (address)
+
+// @@@ Ralph uses per-transaction approvals via brace syntax {owner -> tokenId: 1} instead of persistent approvals.
+// UNSUPPORTED: function approve(address to, uint256 tokenId) external
+
+// @@@ Ralph has no persistent approvals - approvals are per-transaction via brace syntax.
+// UNSUPPORTED: function getApproved(uint256 tokenId) external view returns (address)
+
+// @@@ Ralph has no operator concept - each transfer requires explicit per-transaction approval.
+// UNSUPPORTED: function setApprovalForAll(address operator, bool _approved) external
+
+// @@@ Ralph has no operator concept - each transfer requires explicit per-transaction approval.
+// UNSUPPORTED: function isApprovedForAll(address owner, address operator) external view returns (bool)
+
+// @@@ Ralph uses native transferToken!(from, to, nftContractId, 1). The from address must be part of the transaction (signing or via preapprovedAssets).
+// UNSUPPORTED: function transferFrom(address from, address to, uint256 tokenId) external
+// UNSUPPORTED: function safeTransferFrom(address from, address to, uint256 tokenId) external
+// UNSUPPORTED: function safeTransferFrom(address from, address to, uint256 tokenId, bytes data) external
+
+// =============================================================================
+// SUMMARY: ERC721 vs Ralph NFTs
+// =============================================================================
+//
+// | ERC721 Concept        | Ralph Equivalent                              | Status    |
+// |-----------------------|-----------------------------------------------|-----------|
+// | Single contract       | Collection + Sub-contracts                    | ❇️ Native |
+// | tokenId (uint256)     | Sub-contract ID (ByteVec)                     | ❇️ Native |
+// | _owners mapping       | UTXO ownership                                | ❇️ Native |
+// | _balances mapping     | Query via API                                 | ❌ No     |
+// | _tokenApprovals       | Per-tx brace syntax                           | ❌ No     |
+// | _operatorApprovals    | Not supported                                 | ❌ No     |
+// | _mint()               | copyCreateSubContractWithToken!()             | ✅ Yes    |
+// | _burn()               | burnToken!() in NFT sub-contract              | ✅ Yes    |
+// | transferFrom()        | transferToken!()                              | ❇️ Native |
+// | safeTransferFrom()    | transferToken!() (no callback needed)         | ❇️ Native |
+// | tokenURI()            | getTokenUri() on NFT sub-contract             | ✅ Yes    |
+// | name()                | getName() on collection                       | ✅ Yes    |
+// | symbol()              | getSymbol() on collection                     | ✅ Yes    |
+//
+// Key Takeaways:
+// 1. Each NFT is its own sub-contract, not just an ID in a mapping
+// 2. Ownership is determined by who holds the NFT's token (UTXO model)
+// 3. No approval mappings - transfers require explicit per-tx approval
+// 4. Events are unnecessary - blockchain natively tracks token movements
+// 5. Collection acts as factory and registry for NFTs

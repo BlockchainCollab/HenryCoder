@@ -66,6 +66,9 @@
       </footer>
     </div>
     <slot name="outer-content" />
+    
+    <!-- ChatBot Component -->
+    <ChatBot />
   </div>
 </template>
 

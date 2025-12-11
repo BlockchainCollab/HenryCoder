@@ -4,6 +4,28 @@ export type PreviousTranslation = {
   errors: string[];
 };
 
+type AgentChunk =
+  | { type: "stage"; data: { stage: string; message: string } }
+  | { type: "tool_start"; data: { tool: string; input: string } }
+  | { type: "tool_end"; data: { tool: string; success: boolean } }
+  | { type: "content"; data: string }
+  | { type: "translation_chunk"; data: string };
+
+/**
+ * Cleans markdown code block wrappers from translated code.
+ * Removes patterns like: ```ralph, ```solidity, ```, and standalone "ralph" or "solidity" lines.
+ */
+function cleanMarkdownFromCode(code: string): string {
+  // Remove opening markdown code fence with optional language
+  let cleaned = code.replace(/^```(?:ralph|solidity)?\s*\n?/i, "");
+  // Remove standalone language identifier at start (ralph or solidity on its own line)
+  cleaned = cleaned.replace(/^(?:ralph|solidity)\s*\n/i, "");
+  // Remove closing markdown code fence
+  cleaned = cleaned.replace(/\n?```\s*$/g, "");
+  // Trim leading/trailing whitespace
+  return cleaned.trim();
+}
+
 export async function translateCode({
   sourceCode,
   options,
@@ -20,22 +42,27 @@ export async function translateCode({
   initialOutputCode: string;
   previousTranslation?: PreviousTranslation;
   setOutputCode: (val: string) => void;
-  setLoadingStatus: (val: number) => void;
+  setLoadingStatus: (val: string) => void;
   setErrors: (val: string[]) => void;
 }) {
+  const sessionId = ref<string>(crypto.randomUUID());
   setOutputCode(initialOutputCode);
   setErrors([]);
-  let output = initialOutputCode;
+  setLoadingStatus("");
+
+  let streamedTranslationCode = initialOutputCode;
+
   try {
     const response = await fetch(
-      `${runtimeConfig.public.apiBase}/translate/stream`,
+      `${runtimeConfig.public.apiBase}/chat/stream`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          source_code: sourceCode,
+          message: sourceCode,
+          session_id: sessionId.value,
           options: {
             optimize: options.optimize,
             include_comments: options.includeComments,
@@ -43,54 +70,53 @@ export async function translateCode({
             smart: options.smart,
             translate_erc20: options.translateERC20,
           },
-          previous_translation: previousTranslation,
         }),
       }
     );
+
     if (!response.ok || !response.body) {
       const errorData = await response
         .json()
         .catch(() => ({ detail: "Translation failed with non-JSON response" }));
       throw new Error(errorData.detail || "Translation failed");
     }
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let done = false;
     let buffer = "";
-    let thoughts_size = 0;
-    setOutputCode("");
-    setErrors([]);
     let errorsArr: string[] = [];
+
     while (!done) {
       const { value, done: streamDone } = await reader.read();
       done = streamDone;
+
       if (value) {
         buffer += decoder.decode(value, { stream: true });
         let lines = buffer.split("\n");
         buffer = lines.pop() || "";
+
         for (const line of lines) {
           if (!line.trim()) continue;
+
           try {
-            const data = JSON.parse(line);
-            if (data.translated_code) {
-              output += data.translated_code;
-              setOutputCode(output);
+            const chunk = JSON.parse(line) as AgentChunk;
+
+            // Handle stage updates for progress indicator
+            if (chunk.type === "stage") {
+              setLoadingStatus(chunk.data.message);
             }
-            if (data.reasoning_chunk) {
-              thoughts_size += data.reasoning_chunk.length;
-              setLoadingStatus(thoughts_size);
+
+            // Handle translation chunks - streamed directly from translator
+            if (chunk.type === "translation_chunk") {
+              // Stream the translation chunk directly to the output
+              streamedTranslationCode += chunk.data;
+              setOutputCode(streamedTranslationCode);
             }
-            if (data.warnings && data.warnings.length > 0) {
-              errorsArr = [
-                ...errorsArr,
-                ...data.warnings.map((w: string) => `Warning: ${w}`),
-              ];
-            }
-            if (data.errors && data.errors.length > 0) {
-              errorsArr = [
-                ...errorsArr,
-                ...data.errors.map((e: string) => String(e)),
-              ];
+
+            // Handle tool execution (for future agentic view)
+            if (chunk.type === "tool_start") {
+              setLoadingStatus(`🔧 Using tool: ${chunk.data.tool}`);
             }
           } catch (e) {
             // Ignore JSON parse errors for incomplete lines
@@ -98,43 +124,20 @@ export async function translateCode({
         }
       }
     }
-    // Handle any remaining buffered line
-    if (buffer.trim()) {
-      try {
-        const data = JSON.parse(buffer);
-        if (data.translated_code) {
-          output += data.translated_code;
-        }
-        if (data.warnings && data.warnings.length > 0) {
-          errorsArr = [
-            ...errorsArr,
-            ...data.warnings.map((w: string) => `Warning: ${w}`),
-          ];
-        }
-        if (data.errors && data.errors.length > 0) {
-          errorsArr = [
-            ...errorsArr,
-            ...data.errors.map((e: string) => String(e)),
-          ];
-        }
-      } catch (e) {
-        // Ignore
-      }
+
+    // Clean up any markdown artifacts from the final output
+    const cleanedCode = cleanMarkdownFromCode(streamedTranslationCode);
+    if (cleanedCode !== streamedTranslationCode) {
+      setOutputCode(cleanedCode);
     }
-    if (output.startsWith("```ralph")) {
-      // Remove the initial code block marker
-      output = output.replace(/^```ralph\s*\n/, "");
-      // Remove the final code block marker
-      if (output.endsWith("```")) {
-        output = output.slice(0, -3).trim();
-      }
-    }
-    setOutputCode(output);
+    
+    setLoadingStatus("✅ Translation complete");
     setErrors(errorsArr);
   } catch (e: any) {
     console.error("Translation error:", e);
     const errorMessage = e instanceof Error ? e.message : String(e);
     setErrors([errorMessage]);
+    setLoadingStatus("");
   }
 }
 
@@ -149,7 +152,7 @@ export async function compileTranslatedCode({
   onError: (val: string[]) => void;
   onSuccess: (message?: string) => void;
 }) {
-  let node_endpoint = "/contracts/compile-contract";
+  let node_endpoint = "/contracts/compile-project";
   let url = `${runtimeConfig.public.nodeUrl}${node_endpoint}`;
   let queryJson = {
     code: outputCode,
@@ -181,7 +184,9 @@ export async function compileTranslatedCode({
         }
 
         if (
-          errorMsg.includes("Code generation is not supported for abstract contract")
+          errorMsg.includes(
+            "Code generation is not supported for abstract contract"
+          )
         ) {
           onSuccess(
             "No syntax errors, but code generation is not supported for abstract contracts - please try locally"
@@ -198,4 +203,94 @@ export async function compileTranslatedCode({
       console.error("Compilation error:", error);
       onError([String(error)]);
     });
+}
+
+// Fix Ralph code based on compilation error
+export type FixCodeResult = {
+  fixedCode: string;
+  iterations: number;
+  success: boolean;
+};
+
+type FixStreamEvent =
+  | { type: "stage"; data: { stage: string; message: string } }
+  | { type: "result"; data: { fixed_code: string; iterations: number; success: boolean } }
+  | { type: "error"; data: { message: string } };
+
+export async function fixRalphCode({
+  ralphCode,
+  error,
+  solidityCode,
+  runtimeConfig,
+  onStageUpdate,
+}: {
+  ralphCode: string;
+  error: string;
+  solidityCode?: string;
+  runtimeConfig: any;
+  onStageUpdate?: (stage: string, message: string) => void;
+}): Promise<FixCodeResult> {
+  const response = await fetch(`${runtimeConfig.public.apiBase}/chat/fix`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ralph_code: ralphCode,
+      error: error,
+      solidity_code: solidityCode,
+    }),
+  });
+
+  if (!response.ok || !response.body) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ detail: "Fix request failed" }));
+    throw new Error(errorData.detail || "Failed to fix code");
+  }
+
+  // Parse streaming response
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: FixCodeResult | null = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      try {
+        const event = JSON.parse(line) as FixStreamEvent;
+
+        if (event.type === "stage" && onStageUpdate) {
+          onStageUpdate(event.data.stage, event.data.message);
+        } else if (event.type === "result") {
+          result = {
+            fixedCode: event.data.fixed_code,
+            iterations: event.data.iterations,
+            success: event.data.success,
+          };
+        } else if (event.type === "error") {
+          throw new Error(event.data.message);
+        }
+      } catch (e) {
+        // Ignore JSON parse errors for incomplete lines
+        if (e instanceof SyntaxError) continue;
+        throw e;
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error("No result received from fix endpoint");
+  }
+
+  return result;
 }

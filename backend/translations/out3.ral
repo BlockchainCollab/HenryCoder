@@ -1,6 +1,4 @@
-// Rock Paper Scissors Game Contract
-
-// Struct must be defined globally
+// @@@ Ralph requires struct definitions outside contracts; Solidity allows nested struct declarations within contracts
 struct Game {
   mut playerOne: Address,
   mut playerTwo: Address,
@@ -9,20 +7,17 @@ struct Game {
   mut playerTwoChoice: U256,
   mut playerOneHash: ByteVec,
   mut playerTwoHash: ByteVec,
-  mut status: U256,  // GameStatus enum stored as U256
-  mut outcome: U256  // GameOutcome enum stored as U256
+  mut status: U256,
+  mut outcome: U256
 }
 
-// Alephium has built-in Reentrancy protection, so we don't need to inherit it
+// @@@ Ralph has built-in reentrancy protection at protocol level; Solidity requires explicit ReentrancyGuard inheritance
 Contract RPSv2() {
-  // Maps
   mapping[Address, Game] games
   mapping[Address, U256] playerBalances
 
-  // Events
   event GetGameOutcome(outcome: U256)
 
-  // Enums
   enum GameStatus {
     NonExistent = 0
     Started = 1
@@ -35,7 +30,6 @@ Contract RPSv2() {
     PlayerTwo = 2
   }
 
-  // Error codes for all asserts and panics
   enum ErrorCodes {
     GameHashNotProvided = 1001
     ProblemWithOtherPlayer = 1002
@@ -52,21 +46,21 @@ Contract RPSv2() {
     NoBalance = 1013
   }
 
-  // Start a new game
+  // @@@ Ralph uses @using(preapprovedAssets=true) for token transfers; Solidity uses msg.value for ETH transfers
   @using(updateFields = true, preapprovedAssets = true, checkExternalCaller = false)
   pub fn startGame(gameHash: ByteVec, opponent: Address, gameStake: U256) -> () {
     let caller = callerAddress!()
     
-    // Validate inputs
+    // @@@ Ralph uses # for empty ByteVec; Solidity uses bytes32(0) or empty bytes
     assert!(gameHash != #, ErrorCodes.GameHashNotProvided)
     assert!(opponent != nullContractAddress!() && opponent != caller, ErrorCodes.ProblemWithOtherPlayer)
+    // @@@ Ralph requires explicit mapping access check; Solidity mappings auto-initialize with default values
     assert!(games[caller].status == GameStatus.NonExistent, ErrorCodes.OldGameOrNoGame)
     assert!(gameStake <= playerBalances[caller], ErrorCodes.PlayersFundsInsufficient)
 
-    // Deduct stake from player's balance
     playerBalances[caller] = playerBalances[caller] - gameStake
     
-    // Create new game
+    // @@@ Ralph requires all struct fields to be mutable for reassignment; Solidity allows selective field mutability
     let newGame = Game {
       playerOne: caller,
       playerTwo: opponent,
@@ -78,16 +72,13 @@ Contract RPSv2() {
       status: GameStatus.Started,
       outcome: GameOutcome.Draw
     }
-    // Assignment only works if all nested fields are mutable
     games[caller] = newGame
   }
 
-  // Player 2 joins game
   @using(updateFields = true, preapprovedAssets = true, checkExternalCaller = false)
   pub fn participateGame(gameHash: ByteVec, opponent: Address) -> () {
     let caller = callerAddress!()
     
-    // Validate inputs
     assert!(gameHash != #, ErrorCodes.GameHashNotProvided)
     assert!(opponent != nullContractAddress!(), ErrorCodes.ProblemWithOtherPlayer)
     assert!(games[opponent].playerTwo == caller, ErrorCodes.YouAreNotPlayer2)
@@ -96,17 +87,15 @@ Contract RPSv2() {
     let gameStake = games[opponent].stake
     assert!(gameStake <= playerBalances[caller], ErrorCodes.PlayerFundsInsufficient)
 
-    // Deduct stake from player's balance
     playerBalances[caller] = playerBalances[caller] - gameStake
 
-    // Update game state
+    // @@@ Ralph requires explicit mut keyword for mutable local variables; Solidity infers mutability from usage
     let mut game = games[opponent]
     game.playerTwoHash = gameHash
     game.status = GameStatus.Participated
     games[opponent] = game
   }
 
-  // Reveal player choice
   @using(updateFields = true, checkExternalCaller = false)
   pub fn revealChoice(choice: U256, salt: ByteVec, playerOne: Address) -> () {
     let caller = callerAddress!()
@@ -121,18 +110,17 @@ Contract RPSv2() {
       assert!(game.playerTwoHash == getSaltedHash(choice, salt), ErrorCodes.InvalidSalt)
       game.playerTwoChoice = choice
     } else {
+      // @@@ Ralph uses panic! for unrecoverable errors; Solidity uses revert() or require() for all reverts
       panic!(ErrorCodes.InvalidPlayer)
     }
     
     games[playerOne] = game
   }
 
-  // End game and determine winner
   @using(updateFields = true, checkExternalCaller = false)
   pub fn endGame(playerOne: Address) -> U256 {
     let game = games[playerOne]
     
-    // Validate game state
     assert!(
       game.playerOneChoice > 0 && game.playerTwoChoice > 0,
       ErrorCodes.ChoicesNotRevealed
@@ -143,11 +131,9 @@ Contract RPSv2() {
     let playerOneChoice = game.playerOneChoice
     let playerTwoChoice = game.playerTwoChoice
     
-    // Calculate winner: (3 + playerOneChoice - playerTwoChoice) % 3
-    // In Ralph enums are simply U256 values, and there is no type conversion
+    // @@@ Ralph enums are U256 values without implicit casting; Solidity enums support implicit type conversion
     let gameResult = (3 + playerOneChoice - playerTwoChoice) % 3
     
-    // Distribute winnings
     if gameResult == GameOutcome.Draw {
       playerBalances[playerOne] = playerBalances[playerOne] + stake
       playerBalances[playerTwo] = playerBalances[playerTwo] + stake
@@ -159,7 +145,6 @@ Contract RPSv2() {
       panic!(ErrorCodes.InvalidOutcome)
     }
     
-    // Reset game state
     games[playerOne] = Game{
       playerOne: nullContractAddress!(),
       playerTwo: nullContractAddress!(),
@@ -172,48 +157,49 @@ Contract RPSv2() {
       outcome: GameOutcome.Draw
     }
     
-    // Emit event
     emit GetGameOutcome(gameResult)
     return gameResult
   }
 
-  // Internal function to generate salted hash
+  // @@@ Ralph uses keccak256! macro for hashing; Solidity uses keccak256() function
   fn getSaltedHash(answer: U256, salt: ByteVec) -> ByteVec {
+    // @@@ Ralph uses encodeToByteVec! for encoding; Solidity uses abi.encodePacked()
     return keccak256!(encodeToByteVec!(answer, salt))
   }
 
-  // Deposit funds
+  // @@@ Ralph uses tokenRemaining! to check approved token amounts; Solidity directly accesses msg.value for ETH
   @using(preapprovedAssets = true, updateFields = true, checkExternalCaller = false)
   pub fn deposit() -> () {
     let caller = callerAddress!()
+    // @@@ Ralph requires explicit token approval before contract call; Solidity receives ETH directly with payable
     let amount = tokenRemaining!(caller, ALPH)
     playerBalances[caller] = playerBalances[caller] + amount
   }
 
-  // Withdraw funds
+  // @@@ Ralph uses transferTokenFromSelf! for contract-to-user transfers; Solidity uses address.transfer() or call{value:}
   @using(assetsInContract = true, updateFields = true, checkExternalCaller = false)
   pub fn withdraw() -> () {
     let caller = callerAddress!()
     let playerBalance = playerBalances[caller]
     
     assert!(playerBalance > 0, ErrorCodes.NoBalance)
+    // @@@ Ralph requires zeroing balance before transfer to prevent reentrancy; Solidity relies on ReentrancyGuard or checks-effects-interactions pattern
     playerBalances[caller] = 0
     
     transferTokenFromSelf!(caller, ALPH, playerBalance)
   }
 
-  // Get contract ALPH balance
   @using(assetsInContract = true, checkExternalCaller = false)
   pub fn getContractBalance() -> U256 {
+    // @@@ Ralph uses selfAddress! to reference contract; Solidity uses address(this)
     return tokenRemaining!(selfAddress!(), ALPH)
   }
 
-  // Get player balance
   pub fn getPlayerBalance(playerAddress: Address) -> U256 {
     return playerBalances[playerAddress]
   }
 
-  // Get caller address
+  // @@@ Ralph uses externalCallerAddress! to get original caller; Solidity uses msg.sender which can be contract in delegatecall
   pub fn getMsgSender() -> Address {
     return externalCallerAddress!()
   }

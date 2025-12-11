@@ -1,0 +1,73 @@
+// Ralph Translation of ERC721Royalty
+// ====================================
+// @@@ ERC-2981 royalty standard can be implemented in Ralph. However, enforcement is voluntary - marketplaces must honor it.
+Abstract Contract NFTCollectionRoyalty(
+  mut defaultRoyaltyRecipient: Address,
+  mut defaultRoyaltyBps: U256  // Basis points (e.g., 250 = 2.5%)
+) {
+  // Per-token royalty overrides (recipient, bps)
+  mapping[U256, (Address, U256)] tokenRoyalty
+
+  const NFTCollectionRoyaltyInvalidBps = 72121
+  const MaxBps = 10000  // 100%
+
+  // =========================================================================
+  // royaltyInfo(uint256 tokenId, uint256 salePrice)
+  // =========================================================================
+  // Returns the royalty recipient and amount for a given sale.
+  // @@@ This is informational only - enforcement depends on marketplace
+  pub fn royaltyInfo(tokenId: U256, salePrice: U256) -> (Address, U256) {
+    let (recipient, bps) = if (tokenRoyalty.contains!(tokenId)) {
+      tokenRoyalty[tokenId]
+    } else {
+      (defaultRoyaltyRecipient, defaultRoyaltyBps)
+    }
+    
+    let royaltyAmount = (salePrice * bps) / MaxBps
+    return recipient, royaltyAmount
+  }
+
+  // =========================================================================
+  // Internal: Set default royalty
+  // =========================================================================
+  @using(updateFields = true)
+  fn setDefaultRoyalty(recipient: Address, bps: U256) -> () {
+    assert!(bps <= MaxBps, NFTCollectionRoyaltyInvalidBps)  // Royalty cannot exceed 100%
+    defaultRoyaltyRecipient = recipient
+    defaultRoyaltyBps = bps
+  }
+
+  // =========================================================================
+  // Internal: Set per-token royalty
+  // =========================================================================
+  fn setTokenRoyalty(tokenId: U256, recipient: Address, bps: U256) -> () {
+    assert!(bps <= MaxBps, NFTCollectionRoyaltyInvalidBps)  // Royalty cannot exceed 100%
+    if (tokenRoyalty.contains!(tokenId)) {
+      tokenRoyalty[tokenId] = (recipient, bps)
+    } else {
+      tokenRoyalty.insert!(tokenId, (recipient, bps))
+    }
+  }
+
+  // =========================================================================
+  // Internal: Reset per-token royalty to default
+  // =========================================================================
+  fn resetTokenRoyalty(tokenId: U256) -> () {
+    if (tokenRoyalty.contains!(tokenId)) {
+      tokenRoyalty.remove!(tokenId)
+    }
+  }
+}
+
+// =============================================================================
+// IMPORTANT NOTES
+// =============================================================================
+//
+// 1. Royalties are NOT automatically enforced in Ralph/Alephium
+// 2. Marketplaces must query royaltyInfo() and voluntarily pay royalties
+// 3. Direct P2P transfers via native transferToken!() bypass royalties entirely
+// 4. This matches ERC-2981 behavior in Ethereum - royalties are advisory
+//
+// For enforced royalties, consider:
+// - Building a marketplace contract that always pays royalties
+// - Using escrow patterns where sales go through your contract

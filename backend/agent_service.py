@@ -208,14 +208,13 @@ class ChatAgent:
 
     def __init__(self):
         """Initialize the agent with tools."""
-        base_url = API_URL.replace("/chat/completions", "") if API_URL else None
         
         # Main agent LLM
         self.llm = ChatOpenAI(
             model=AGENT_MODEL,
             temperature=0.7,
             api_key=API_KEY,
-            base_url=base_url,
+            base_url=API_URL,
         )
         
         # Separate LLM for fixing tool (uses LLM_MODEL for better quality fixes)
@@ -223,7 +222,7 @@ class ChatAgent:
             model=LLM_MODEL,
             temperature=0.3,  # Lower temperature for more precise fixes
             api_key=API_KEY,
-            base_url=base_url,
+            base_url=API_URL,
         )
 
         # Define tools
@@ -484,10 +483,9 @@ Do not include any explanation, just the corrected code."""
             "- Generate Ralph contract templates\n"
             "- Debug and improve Ralph code\n\n"
             "CRITICAL WORKFLOW FOR CODE WITH IMPORTS:\n"
-            "1. Check if the code contains 'import' statements\n"
-            "2. If YES → ALWAYS use resolve_solidity_imports tool FIRST\n"
-            "3. Then use translate_evm_to_ralph with the preprocessed code\n"
-            "4. If NO imports → directly use translate_evm_to_ralph\n\n"
+            "1. Check if the code contains at least one 'import' statement\n"
+            "2. If YES → MUST use `resolve_solidity_imports` tool BEFORE `translate_evm_to_ralph`\n"
+            "3. Then use translate_evm_to_ralph with the preprocessed code\n\n"
             "IMPORTANT OUTPUT RULES:\n"
             "- After translation is complete, DO NOT generate any additional text, summaries, or explanations\n"
             "- The code is streamed directly to the user - no need to repeat it or comment on it\n"

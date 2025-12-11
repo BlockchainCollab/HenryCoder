@@ -57,6 +57,7 @@ Abstract Contract FungibleToken (
     return tokenMetadata.decimals
   }
 
+  // Solidity: _mint(address to, uint256 amount)
   // @@@ In Ralph all token minting is capped by the initial UTXO issuance.
   @using(assetsInContract = true)
   fn innerMint(to: Address, amount: U256) -> () {
@@ -64,7 +65,8 @@ Abstract Contract FungibleToken (
     tokenMetadata.totalSupply = tokenMetadata.totalSupply + amount
   }
 
-  // @@@ Burn tokens in ERC20 sense - they can be reissued later
+  // Solidity: _burn(address from, uint256 amount)
+  // @@@ Burn tokens in ERC20 sense - they can be reissued later, address to burn from must approve the tokens
   @using(preapprovedAssets = true)
   fn innerBurn(from: Address, amount: U256) -> () {
     transferTokenToSelf!(from, selfTokenId!(), amount)

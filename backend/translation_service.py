@@ -163,7 +163,7 @@ async def perform_translation(
             response = await client.responses.create(
                 model=model,
                 input=input_messages,
-                max_output_tokens=10000 if translate_request.options.smart else 32000,
+                max_output_tokens=20000 if translate_request.options.smart else 40000,
                 temperature=0.0,
                 stream=True
             )

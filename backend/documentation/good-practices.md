@@ -50,6 +50,7 @@ Contract Roles(
 ### No underscores at beginning of names
 Ralph doesn't support names that start with underscores.
 You can only use underscore `_` as a suffix.
+Best practice is to use names such as innerBurn, innerMint, etc.
 
 ```ralph
 import "std/fungible_token_interface"
@@ -79,13 +80,13 @@ Contract SimpleToken(
   }
 
   @using(updateFields = true, assetsInContract = true)
-  fn mint_(to_: Address, amount_: U256) -> () {
+  fn innerMint(to_: Address, amount_: U256) -> () {
     transferTokenFromSelf!(to_, selfTokenId!(), amount_)
     supply = supply + amount_
   }
 
   @using(updateFields = true, preapprovedAssets = true, payToContractOnly = true)
-  fn burn_(from_: Address, amount_: U256) -> () {
+  fn innerBurn(from: Address, amount_: U256) -> () {
     transferTokenToSelf!(from_, selfTokenId!(), amount_)
     supply = supply - amount_
   }

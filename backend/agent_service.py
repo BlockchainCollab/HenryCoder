@@ -42,6 +42,7 @@ if not logger.handlers:
 API_KEY = os.getenv("API_KEY")
 API_URL = os.getenv("API_URL")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "mistralai/mistral-small-3.2-24b-instruct")
+LLM_MODEL = os.getenv("LLM_MODEL", "mistralai/devstral-2512:free")
 
 
 # Global context for current session during tool execution
@@ -207,11 +208,22 @@ class ChatAgent:
 
     def __init__(self):
         """Initialize the agent with tools."""
+        base_url = API_URL.replace("/chat/completions", "") if API_URL else None
+        
+        # Main agent LLM
         self.llm = ChatOpenAI(
             model=AGENT_MODEL,
             temperature=0.7,
             api_key=API_KEY,
-            base_url=API_URL.replace("/chat/completions", "") if API_URL else None,
+            base_url=base_url,
+        )
+        
+        # Separate LLM for fixing tool (uses LLM_MODEL for better quality fixes)
+        self.fix_llm = ChatOpenAI(
+            model=LLM_MODEL,
+            temperature=0.3,  # Lower temperature for more precise fixes
+            api_key=API_KEY,
+            base_url=base_url,
         )
 
         # Define tools
@@ -803,8 +815,8 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
 REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only fix the specific compilation error above. Do not simplify or remove any code."""
 
             try:
-                # Use direct LLM call (not agent) for focused fixing
-                response = await self.llm.ainvoke([
+                # Use dedicated fix_llm (LLM_MODEL) for focused fixing
+                response = await self.fix_llm.ainvoke([
                     {"role": "system", "content": fix_system_prompt},
                     {"role": "user", "content": fix_prompt}
                 ])

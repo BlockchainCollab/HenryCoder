@@ -426,6 +426,25 @@ The amount of ALPH required to create a map entry, which is '0.1 ALPH' since Rho
 
 ---
 
+## Chain Functions
+---
+
+### blockTimeStamp
+
+```ralph
+fn blockTimeStamp!() -> (U256)
+```
+
+> @returns *the timestamp of the current block in milliseconds since the Unix epoch*
+
+### dustAmount
+
+```ralph
+fn dustAmount!() -> (U256)
+```
+
+> @returns *the dust amount of an UTXO*
+
 
 ## Conversion Functions
 ---

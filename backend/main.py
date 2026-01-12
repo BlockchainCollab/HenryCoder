@@ -92,7 +92,17 @@ async def translate_code_stream(request: TranslateRequest):
         # Dump translation to file
         dump_translation(request, complete_code)
 
-    return StreamingResponse(translation_generator(), media_type="application/json")
+    # Headers to prevent proxy buffering and ensure proper streaming
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",  # Disable NGINX buffering
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(
+        translation_generator(), 
+        media_type="application/json",
+        headers=headers
+    )
 
 
 @app.get("/api/health")
@@ -311,7 +321,13 @@ async def chat_stream(request: ChatRequest):
             error_event = {"type": "error", "data": {"message": str(e)}}
             yield json.dumps(error_event) + "\n"
 
-    return StreamingResponse(chat_generator(), media_type="application/x-ndjson")
+    # Headers to prevent proxy buffering and ensure proper streaming
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",  # Disable NGINX buffering
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(chat_generator(), media_type="application/json", headers=headers)
 
 
 @app.post("/api/chat", response_model=ChatResponse)

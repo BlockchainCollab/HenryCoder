@@ -209,10 +209,10 @@ class ChatAgent:
     def __init__(self):
         """Initialize the agent with tools."""
         
-        # Main agent LLM
+        # Main agent LLM - lower temperature for more deterministic tool usage
         self.llm = ChatOpenAI(
             model=AGENT_MODEL,
-            temperature=0.7,
+            temperature=0.1,  # Low temperature to prefer tool calls over text generation
             api_key=API_KEY,
             base_url=API_URL,
         )
@@ -486,11 +486,14 @@ Do not include any explanation, just the corrected code."""
             "1. Check if the code contains at least one 'import' statement\n"
             "2. If YES → MUST use `resolve_solidity_imports` tool BEFORE `translate_evm_to_ralph`\n"
             "3. Then use translate_evm_to_ralph with the preprocessed code\n\n"
-            "IMPORTANT OUTPUT RULES:\n"
-            "- After translation is complete, DO NOT generate any additional text, summaries, or explanations\n"
-            "- The code is streamed directly to the user - no need to repeat it or comment on it\n"
-            "- Only respond with text if the user asks a question (not for translations)\n"
-            "- Keep tool-related output minimal and functional"
+            "CRITICAL OUTPUT RULES - YOU MUST FOLLOW THESE:\n"
+            "- For ANY code translation request: ONLY use tools. DO NOT output any text before, during, or after tool calls.\n"
+            "- NEVER explain what you're about to do - just call the tool immediately.\n"
+            "- NEVER summarize or comment on the translation result - the code streams directly to the user.\n"
+            "- NEVER say things like 'I'll translate this' or 'Here's the translation' - just use the tool.\n"
+            "- ONLY respond with text if the user asks a direct question that doesn't involve code translation.\n"
+            "- Your text output is NOT displayed to the user - only tool results are shown.\n"
+            "- Be silent and efficient: tool call only, no chatter."
         )
 
     async def chat(

@@ -9,7 +9,8 @@ type AgentChunk =
   | { type: "tool_start"; data: { tool: string; input: string } }
   | { type: "tool_end"; data: { tool: string; success: boolean } }
   | { type: "content"; data: string }
-  | { type: "translation_chunk"; data: string };
+  | { type: "translation_chunk"; data: string }
+  | { type: "error"; data: { message: string } };
 
 /**
  * Cleans markdown code block wrappers from translated code.
@@ -53,6 +54,10 @@ export async function translateCode({
   let streamedTranslationCode = initialOutputCode;
 
   try {
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+
     const response = await fetch(
       `${runtimeConfig.public.apiBase}/chat/stream`,
       {
@@ -71,8 +76,11 @@ export async function translateCode({
             translate_erc20: options.translateERC20,
           },
         }),
+        signal: controller.signal,
       }
     );
+
+    clearTimeout(timeoutId);
 
     if (!response.ok || !response.body) {
       const errorData = await response
@@ -111,12 +119,19 @@ export async function translateCode({
             if (chunk.type === "translation_chunk") {
               // Stream the translation chunk directly to the output
               streamedTranslationCode += chunk.data;
+              console.log(`[Stream] Accumulated length: ${streamedTranslationCode.length}, chunk: "${chunk.data.slice(0, 50)}..."`);
               setOutputCode(streamedTranslationCode);
             }
 
             // Handle tool execution (for future agentic view)
             if (chunk.type === "tool_start") {
               setLoadingStatus(`🔧 Using tool: ${chunk.data.tool}`);
+            }
+
+            // Handle errors from backend
+            if (chunk.type === "error") {
+              const errorMsg = chunk.data?.message || "Unknown error";
+              errorsArr.push(errorMsg);
             }
           } catch (e) {
             // Ignore JSON parse errors for incomplete lines
@@ -135,7 +150,26 @@ export async function translateCode({
     setErrors(errorsArr);
   } catch (e: any) {
     console.error("Translation error:", e);
-    const errorMessage = e instanceof Error ? e.message : String(e);
+    let errorMessage: string;
+    
+    if (e.name === 'AbortError') {
+      errorMessage = "Translation timed out. Please try again with a smaller contract.";
+    } else if (
+      e.message === 'network error' || 
+      e.message?.includes('network') ||
+      e.message?.includes('Failed to fetch') ||
+      e.name === 'TypeError'
+    ) {
+      // Check if we received partial data (indicates chunked encoding issue)
+      if (streamedTranslationCode && streamedTranslationCode !== initialOutputCode) {
+        errorMessage = "The connection was interrupted during translation. The server may have timed out. Partial translation is shown above - you can try again or work with the partial result.";
+      } else {
+        errorMessage = "Connection error - the server connection was lost. This may be due to a timeout on long translations. Please try again, or try with a smaller contract.";
+      }
+    } else {
+      errorMessage = e instanceof Error ? e.message : String(e);
+    }
+    
     setErrors([errorMessage]);
     setLoadingStatus("");
   }

@@ -119,7 +119,6 @@ export async function translateCode({
             if (chunk.type === "translation_chunk") {
               // Stream the translation chunk directly to the output
               streamedTranslationCode += chunk.data;
-              console.log(`[Stream] Accumulated length: ${streamedTranslationCode.length}, chunk: "${chunk.data.slice(0, 50)}..."`);
               setOutputCode(streamedTranslationCode);
             }
 

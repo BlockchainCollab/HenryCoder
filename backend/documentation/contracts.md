@@ -384,6 +384,56 @@ The built-in `payGasFee` has two parameters:
 Note that gasless transactions do not mean that transactions do not require gas fees, but that others pay the gas fees on your behalf. You still need to have ALPH to send transactions.
 
 
+## Modifiers (Not Supported)
+
+Ralph does not support Solidity-style modifiers. In Solidity, modifiers are used to add reusable preconditions or postconditions to functions. In Ralph, you achieve the same functionality by using helper functions that perform the checks.
+
+### Solidity Example with Modifiers
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Owned {
+    address public owner;
+    
+    constructor() {
+        owner = msg.sender;
+    }
+    
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not the owner");
+        _;
+    }
+    
+    function withdraw() public onlyOwner {
+        payable(owner).transfer(address(this).balance);
+    }
+}
+```
+
+### Ralph Workaround for modifiers
+
+In Ralph, replace modifiers with explicit function calls at the beginning of your functions:
+
+```ralph
+Contract Owned(mut owner: Address) {
+  const OwnedNotOwner = 0
+  const OwnedInvalidAddress = 1
+
+  fn checkOwner() -> () {
+    checkCaller!(externalCallerAddress!() == owner, OwnedNotOwner)
+  }
+
+  @using(assetsInContract = true)
+  pub fn withdraw() -> () {
+    checkOwner()
+    transferTokenFromSelf!(owner, ALPH, tokenRemaining!(selfAddress!(), ALPH))
+  }
+}
+```
+
+
 ## Limitations of Ralph
 - The maximum number of event fields is 8.
 - Contract statements must be in the order of `maps`, `events`, `consts`, `enums` and `methods`.

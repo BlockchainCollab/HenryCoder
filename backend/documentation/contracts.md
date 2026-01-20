@@ -12,7 +12,6 @@ In Ralph, the contract ID is used more frequently. Contract ids can be converted
 
 Contracts in Ralph are similar to classes in object-oriented languages. 
 Each contract can contain declarations of:
-0. contract fields
 1. maps (must be inside contract scope)
 2. events (must be inside contract or interface scope)
 3. consts
@@ -53,9 +52,10 @@ Contract MyToken(supply: U256, name: ByteVec, mut owner: Address) {
 }
 ```
 
-### Fields
+### Fields (contract state)
 
 Contract fields are permanently stored in the contract storage, and the fields can be changed by the contract code. Applications can get the contract fields through the REST API of an Alephium client.
+This is the only way to store primitive types and fixed-length arrays in contract's state. All persistent state variables must appear as contract fields.
 
 ```ralph
 // Contract `Foo` has two fields:
@@ -225,7 +225,7 @@ fn upgrade(newCode: ByteVec) -> () {
 Ralph also supports multiple inheritance, when a contract inherits from other contracts, only a single contract is created on the blockchain, and the code from all the parent contracts is compiled into the created contract. `Contract` can ONLY "extends" `Abstract Contract`.
 
 ```ralph
-Abstract Contract Foo(a: U256) {
+Abstract Contract Foo(a: U256, mut bux: ByteVec) {
   pub fn foo() -> () {
     // ...
   }
@@ -238,11 +238,26 @@ Abstract Contract Bar(b: ByteVec) {
 }
 
 // The field name of the child contract must be the same as the field name of parnet contracts.
-Contract Baz(a: U256, b: ByteVec) extends Foo(a), Bar(b) {
+Contract Baz(a: U256, b: ByteVec, mut bux: ByteVec) extends Foo(a, bux), Bar(b) {
   pub fn baz() -> () {
     foo()
     bar()
   }
+}
+```
+
+In Ralph all inherited fields must be included in the child contract's field list, and the order of the fields must follow the order of the parent contracts.
+
+When extending parent contracts, you must explicitly pass all field values - default values are not supported:
+
+```ralph
+Abstract Contract Parent(value: U256) {
+  // ...
+}
+
+// VALID: Fields must be declared and passed explicitly
+Contract Child(value: U256) extends Parent(value) {
+  // ...
 }
 ```
 
@@ -253,7 +268,6 @@ In Ralph, abstract contracts are not instantiable, which means the following cod
 let bazId = // The contract id of `Baz`
 Foo(bazId).foo() // ERROR
 ```
-
 :::
 
 ## Interface

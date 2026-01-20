@@ -1,41 +1,14 @@
-Contract Roles(
-  mut owner: Address
-) {
-  mapping[Address, U256] roles
-
-  enum Role {
-    Default = 0
-    Admin = 1
-    User = 2
+Contract Foo() {
+  // Function `foo` uses the contract assets, and it will transfer 1 alph to the caller
+  @using(assetsInContract = true)
+  fn foo(caller: Address) -> () {
+    transferTokenFromSelf!(caller, ALPH, 1 alph)
   }
 
-  enum ErrorCodes {
-    NotOwner = 1
-    NotAdmin = 2
-    UnknownRole = 3
-  }
-
-  @using(updateFields = true)
-  pub fn changeOwner_(newOwner_: Address) -> () {
-    checkCaller!(externalCallerAddress!() == owner, ErrorCodes.NotOwner)
-    owner = newOwner_
-  }
-
-  pub fn getRole() -> U256 {
-    // add below code if mimic solidity defaults is set to true:
-    // if (!roles.exists!(externalCallerAddress!())) {
-    //   return Role.DEFAULT
-    // }
-    return roles[externalCallerAddress!()]
-  }
-
-  pub fn setRole(user: Address, role: U256) -> () {
-    checkCaller!(getRole() == Role.Admin, ErrorCodes.NotAdmin)
-    assert!(role == Role.Admin || role == Role.User || role == Role.Default, ErrorCodes.UnknownRole)
-    if (roles.contains!(user)) {
-      roles[user] = role
-    } else {
-      roles.insert!(user, role)
-    }
+  // Function `bar` must NOT be annotated with `@using(assetsInContract = true)`
+  // because the contract assets will be removed after use
+  fn bar(caller: Address) -> () {
+    // ...
+    foo(caller)
   }
 }

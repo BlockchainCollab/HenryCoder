@@ -179,7 +179,7 @@ There are 3 essential built-in map methods `insert!, remove!, contains!` (see [d
 
 ```ralph
 Contract Counters() {
-  // All maps must be defined here with `mapping[KeyType, ValueType]`, before events and constants
+  // All mappings (maps) must be defined here with `mapping[KeyType, ValueType]`, before events and constants
   mapping[Address, U256] counters
 
   @using(preapprovedAssets = true, checkExternalCaller = false, updateFields = true)

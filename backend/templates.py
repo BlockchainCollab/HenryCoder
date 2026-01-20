@@ -1,12 +1,11 @@
 USER_PROMPT_TEMPLATE = (
     "--- EVM Code to Translate ---\n{source_code}\n--- End EVM Code ---\n\n"
     'Now, translate the above EVM code. There is no limit to how long the output can be. IMPORTANT: Only provide the resulting Ralph code WITHOUT "```ralph" markdown or any other information. '
-    "Optimize: {optimize}. "
     "Include comments: {include_comments}. "
     "Mimic Solidity defaults when loading from map key that does not exist: {mimic_defaults}. "
     "{translate_erc20}\n"
     "You follow these special instructions exactly:\n"
-    "- Contract statements must be in the order of `maps`, `events`, `consts`, `enums` and `methods`."
+    "- Contract statements must be in the order of `map`s, `event`s, `const`s, `enum`s and `fn`s."
     '- MUST NOT use commas "," in enums.\n'
     "- MUST NOT define state variables inside contract body.\n"
     '- MUST NOT use an underscore "_" in front of a function name.\n'

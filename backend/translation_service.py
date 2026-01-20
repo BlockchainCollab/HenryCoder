@@ -51,6 +51,7 @@ def build_translation_system_prompt() -> str:
         "7. Do not include code from PRE-TRANSLATED LIBRARIES in your output. Code is available to use.\n"
         "8. Every translated function can include an additional comment explaining the differences in behavior between Solidity and Ralph, if present. These comments must be one line long and start with '@@@'.\n"
         "   Example: @@@ Solidity allows dynamic array parameters, but Ralph only supports fixed-size arrays.\n\n"
+        "9. Annotate every translated feature that is redundant in Ralph with @@@ comment, ex. ReentrancyGuard\n\n"
         "AVOID:\n"
         # "- Comments like 'Ralph doesn't have X, so we use Y'\n"
         # "- Explaining basic syntax differences in comments\n"
@@ -160,11 +161,13 @@ async def perform_translation(
             if resolved_imports:
                 yield resolved_imports + "\n", "", warnings, errors
             
+            temp = 1.0 if "gemini" in model else 0.2
+
             response = await client.responses.create(
                 model=model,
                 input=input_messages,
-                max_output_tokens=20000 if translate_request.options.smart else 40000,
-                temperature=0.0,
+                max_output_tokens=25000 if translate_request.options.smart else 40000,
+                temperature=temp,
                 stream=True
             )
             

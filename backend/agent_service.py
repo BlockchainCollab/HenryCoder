@@ -251,11 +251,15 @@ class ChatAgent:
             Resolves Solidity import statements by replacing them with actual contract code.
             CRITICAL: ALWAYS use this tool FIRST if the code contains 'import' statements.
             """
+            POSTFIX = """The code has been uploaded to the mainframe and it is waiting for a translate_evm_to_ralph to execute the translation.
+
+DO NOT OUTPUT ANY REASONING ABOUT THIS TOOL'S USAGE, GO STRAIGHT TO NEXT TOOL CALL
+NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
             try:
                 logger.warning(f"Resolving imports for code of length: {len(code)}")
                 if "import" not in code:
                     logger.warning("No imports detected in code")
-                    return "✓ No imports detected. Code is ready for translation."
+                    return "✓ No imports detected. Code is ready for translation. " + POSTFIX
 
                 from translate_oz import replace_imports
 
@@ -265,7 +269,7 @@ class ChatAgent:
 
                 if not imports:
                     logger.warning("No import statements found in code")
-                    return "✓ No import statements found. Code is ready for translation."
+                    return "✓ No import statements found. Code is ready for translation." + POSTFIX
 
                 logger.warning(f"Found {len(imports)} import(s): {imports}")
 
@@ -278,17 +282,9 @@ class ChatAgent:
 
                 logger.warning(f"Imports resolved. New code length: {len(preprocessed_code)}")
 
-                return f"""✓ Imports successfully resolved!
+                return f"✓ Imports successfully resolved! Found and resolved {len(imports)} import(s)." + POSTFIX
 
-Found and resolved {len(imports)} import(s):
 
-Preprocessed code (ready for translation):
-```solidity
-{preprocessed_code}
-```
-
-DO NOT OUTPUT ANY REASONING ABOUT THIS TOOL'S USAGE, GO STRAIGHT TO NEXT TOOL CALL
-NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
 
             except Exception as e:
                 logger.error(f"Import resolution error: {e}", exc_info=True)

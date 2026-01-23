@@ -10,6 +10,7 @@ type AgentChunk =
   | { type: "tool_end"; data: { tool: string; success: boolean } }
   | { type: "content"; data: string }
   | { type: "translation_chunk"; data: string }
+  | { type: "code_snapshot"; data: string }
   | { type: "error"; data: { message: string } };
 
 /**
@@ -36,6 +37,8 @@ export async function translateCode({
   setOutputCode,
   setLoadingStatus,
   setErrors,
+  onToolStart,
+  onToolEnd,
 }: {
   sourceCode: string;
   options: any;
@@ -45,6 +48,8 @@ export async function translateCode({
   setOutputCode: (val: string) => void;
   setLoadingStatus: (val: string) => void;
   setErrors: (val: string[]) => void;
+  onToolStart?: (tool: string, input: string) => void;
+  onToolEnd?: (tool: string, success: boolean) => void;
 }) {
   const sessionId = ref<string>(crypto.randomUUID());
   setOutputCode(initialOutputCode);
@@ -121,10 +126,21 @@ export async function translateCode({
               streamedTranslationCode += chunk.data;
               setOutputCode(streamedTranslationCode);
             }
+            
+            // Handle full code snapshots from agent V2
+            if (chunk.type === "code_snapshot") {
+              streamedTranslationCode = chunk.data;
+              setOutputCode(streamedTranslationCode);
+            }
 
             // Handle tool execution (for future agentic view)
             if (chunk.type === "tool_start") {
+              console.log(`[Agent Tool Start] ${chunk.data.tool}:`, chunk.data.input);
               setLoadingStatus(`🔧 Using tool: ${chunk.data.tool}`);
+              onToolStart?.(chunk.data.tool, chunk.data.input);
+            }
+            if (chunk.type === "tool_end") {
+              onToolEnd?.(chunk.data.tool, chunk.data.success);
             }
 
             // Handle errors from backend

@@ -70,6 +70,31 @@ def build_translation_system_prompt() -> str:
     return base_prompt
 
 
+def build_fim_system_prompt() -> str:
+    """
+    Builds the system prompt for FIM (Fill-In-the-Middle) function translation.
+    """
+    return (
+        "You are an expert Ralph smart contract developer.\n"
+        "TASK: Implement the functions/methods for a specific Ralph contract or interface.\n"
+        "INPUTS:\n"
+        "1. Original Solidity Code (Reference Logic)\n"
+        "2. Partial Ralph Code (Context & Structure) containing a <|fim_start|> ... <|fim_end|> block.\n"
+        "INSTRUCTIONS:\n"
+        "1. Generate valid Ralph code to fill the gap between <|fim_start|> and <|fim_end|>.\n"
+        "2. Output ONLY the code inside the block. Do NOT include the tags or surrounding code.\n"
+        "3. Accurately translate the logic from the Solidity source, respecting Ralph's UTXO model.\n"
+        "4. Use the fields, maps, events, and constants defined in the Partial Ralph Code.\n"
+        "5. For contracts: Implement public functions, private functions, and getters.\n"
+        "6. For interfaces: Define the public method signatures.\n"
+        "7. Include brief comments explaining complex translations only.\n"
+        "8. Do NOT duplicate methods found in parent contracts.\n"
+        "9. Every translated function can include an additional comment explaining the differences in behavior between Solidity and Ralph, if present. These comments must be one line long and start with '@@@'.\n"
+        "   Example: @@@ Solidity allows dynamic array parameters, but Ralph only supports fixed-size arrays.\n\n"
+        f"Ralph Language Details:\n\n{RALPH_DETAILS}"
+    )
+
+
 # Keep original SYSTEM_PROMPT for backwards compatibility
 SYSTEM_PROMPT = build_translation_system_prompt()
 
@@ -81,6 +106,80 @@ def preprocess_source_code(source_code: str) -> str:
     """
 
     return source_code
+
+
+async def perform_fim_translation(
+    solidity_code: str,
+    ralph_code: str,
+    smart: bool = True
+) -> AsyncGenerator[tuple[str, str, list[str], list[str]], None]:
+    """
+    Performs FIM translation to fill in functions.
+    Yields chunks: (content, reasoning, warnings, errors)
+    """
+    warnings: list[str] = []
+    errors: list[str] = []
+    
+    # We use the smart model for coding tasks usually
+    model = SMART_LLM_MODEL if smart else LLM_MODEL
+
+    system_prompt = build_fim_system_prompt()
+    
+    user_prompt = (
+        "Here is the context for the translation:\n\n"
+        "=== ORIGINAL SOLIDITY CODE ===\n"
+        f"{solidity_code}\n\n"
+        "=== PARTIAL RALPH CODE (TARGET) ===\n"
+        f"{ralph_code}\n\n"
+        "Please generate the code to fill the <|fim_start|> ... <|fim_end|> block."
+    )
+
+    print(ralph_code)
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    # Convert to API format
+    input_messages = []
+    for msg in messages:
+        input_messages.append({
+            "type": "message",
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+
+    try:
+        async with openai.AsyncOpenAI(
+            api_key=API_KEY, 
+            base_url=API_URL.replace("/chat/completions", "")
+        ) as client:
+            temp = 0.2
+            
+            response = await client.responses.create(
+                model=model,
+                input=input_messages,
+                max_output_tokens=20000,
+                temperature=temp,
+                stream=True
+            )
+            
+            async for event in response:
+                content = ""
+                reasoning = ""
+
+                if event.type == "response.output_text.delta":
+                    content = event.delta
+                elif event.type == "response.reasoning_text.delta":
+                    reasoning = event.delta
+                
+                if content or reasoning:
+                    yield content, reasoning, warnings, errors
+                    
+    except Exception as e:
+        # Fallback handling or re-raise
+        raise RuntimeError(f"FIM Translation failed: {str(e)}") from e
 
 
 async def perform_translation(

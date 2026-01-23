@@ -399,46 +399,27 @@
           class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
           <div class="relative flex-1 flex flex-col overflow-hidden">
-            <!-- Progress overlay for fix mode (expanded) -->
+            <!-- Agent Tool Status Overlay -->
             <div
-              v-if="loading && progressMode === 'fix' && !progressMinimized"
-              class="absolute inset-0 bg-[#242322]/40 backdrop-blur-[2px] z-10"
+              v-if="loading && currentTool"
+              class="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#191817] border border-[#FBA444] text-[#FBA444] px-4 py-2 rounded-lg shadow-lg animate-pulse"
             >
-              <TranslationProgress
-                :status-message="loadingStatus"
-                :minimized="false"
-                :mode="progressMode"
-                @toggle-minimize="progressMinimized = true"
-              />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span class="font-mono text-sm font-bold">{{ currentTool }}</span>
+               <span class="text-xs text-gray-400 border-l border-gray-600 pl-2 ml-2">{{ loadingStatus }}</span>
             </div>
-            <!-- Minimized progress badge (fix mode) -->
-            <TranslationProgress
-              v-if="loading && progressMode === 'fix' && progressMinimized"
-              :status-message="loadingStatus"
-              :minimized="true"
-              :mode="progressMode"
-              @toggle-minimize="progressMinimized = false"
-            />
-            <!-- Transparent progress overlay for translation (expanded) -->
-            <div
-              v-if="loading && progressMode === 'translate' && !progressMinimized"
-              class="absolute inset-0 bg-[#242322]/40 backdrop-blur-[2px] z-10"
+            
+            <!-- Simple loading spinner if no tool is active yet but loading -->
+             <div
+              v-if="loading && !currentTool"
+              class="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#191817] border border-gray-600 text-gray-300 px-3 py-1.5 rounded-lg shadow-lg"
             >
-              <TranslationProgress
-                :status-message="loadingStatus"
-                :minimized="false"
-                :mode="progressMode"
-                @toggle-minimize="progressMinimized = true"
-              />
+              <div class="animate-spin h-4 w-4 border-2 border-gray-500 rounded-full border-t-transparent"></div>
+              <span class="text-xs">{{ loadingStatus || 'Starting agent...' }}</span>
             </div>
-            <!-- Minimized progress badge (translation only) -->
-            <TranslationProgress
-              v-if="loading && progressMode === 'translate' && progressMinimized"
-              :status-message="loadingStatus"
-              :minimized="true"
-              :mode="progressMode"
-              @toggle-minimize="progressMinimized = false"
-            />
             <div
               ref="outputContainer"
               class="flex-1 overflow-auto custom-scrollbar"
@@ -662,7 +643,6 @@ import {
 } from "@/lib/api";
 import type { PreviousTranslation } from "@/lib/api";
 import CodeViewerWithAnnotations from "@/components/CodeViewerWithAnnotations.vue";
-import TranslationProgress from "@/components/TranslationProgress.vue";
 import { useGasEstimation } from "@/composables/useGasEstimation";
 
 hljs.registerLanguage("rust", rust);
@@ -673,6 +653,7 @@ const outputCode = ref(``);
 const highlightedOutput = ref("");
 const loading = ref(false);
 const loadingStatus = ref("");
+const currentTool = ref<string | null>(null);
 const compiled = ref(false);
 const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
@@ -828,8 +809,16 @@ const translateCodeInner = async (
     setOutputCode: (val: string) => (outputCode.value = val),
     setLoadingStatus: (val: string) => (loadingStatus.value = val),
     setErrors: (val: string[]) => (errors.value = val),
+    onToolStart: (tool: string, input: string) => {
+      currentTool.value = tool;
+      loadingStatus.value = `Using ${tool}...`;
+    },
+    onToolEnd: (tool: string, success: boolean) => {
+      // currentTool.value = null; // Keep the last tool visible or clear it
+    }
   });
   loading.value = false;
+  currentTool.value = null;
   if (options.value.autoCompile && errors.value.length === 0) {
     await compileTranslatedCode();
   }

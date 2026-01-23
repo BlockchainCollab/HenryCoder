@@ -11,12 +11,15 @@ from pydantic import BaseModel
 
 # Import the translation service
 from api_types import (
+    ChatRequest,
+    ChatResponse,
     GasEstimateAllFunctionsResponse,
     GasEstimateRequest,
     GasEstimateResponse,
     TranslateRequest,
     TranslateResponse,
 )
+from agent_service import get_agent
 from gas_estimator import estimate_all_functions, estimate_gas, estimate_with_annotations, get_gas_estimator
 from translation_service import dump_translation, perform_translation
 
@@ -292,8 +295,6 @@ import logging
 from datetime import datetime
 
 # Chat endpoints
-from agent_service import get_agent
-from api_types import ChatRequest, ChatResponse
 
 logger = logging.getLogger(__name__)
 

@@ -1,26 +1,26 @@
 """
 LangChain v1 Agent Service for HenryBot AI Assistant.
 Handles chat interactions with streaming and tool usage.
+Using Reworked Agentic System V2 with granular state manipulation tools.
 """
-
+import aiohttp
 import asyncio
-import json
 import logging
 import os
 import queue
 import re
-from typing import Any, AsyncGenerator, Callable, Dict, List, Literal, Optional, Union
+from typing import Any, AsyncGenerator, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain.tools import tool
+from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from pydantic import BaseModel, Field as PydanticField, field_validator
 
 from api_types import TranslateRequest, TranslationOptions
 from translation_context import RALPH_DETAILS
 from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT
-from translation_service import perform_translation
-
 
 # Type for translation chunk callback
 TranslationChunkCallback = Callable[[str], None]
@@ -44,24 +44,15 @@ API_URL = os.getenv("API_URL")
 AGENT_MODEL = os.getenv("AGENT_MODEL", "mistralai/mistral-small-3.2-24b-instruct")
 LLM_MODEL = os.getenv("LLM_MODEL", "mistralai/devstral-2512:free")
 
+# --- Global Context Management ---
 
-# Global context for current session during tool execution
 _current_session_options: Optional[Dict[str, Any]] = None
-# Thread-safe queue for translation chunks (can be written from any thread)
-_current_translation_queue: Optional[queue.Queue] = None
-
+_current_translation_queue: Optional[asyncio.Queue] = None
+_current_session_id: Optional[str] = None
 
 def get_current_session_options() -> Dict[str, Any]:
-    """
-    Get translation options from current session context.
-    
-    Returns:
-        Dictionary with translation options (optimize, include_comments, etc.)
-        Returns default values if no session context is set.
-    """
     if _current_session_options:
         return _current_session_options
-    # Return default options
     return {
         "optimize": False,
         "include_comments": True,
@@ -70,427 +61,640 @@ def get_current_session_options() -> Dict[str, Any]:
         "translate_erc20": False,
     }
 
-
 def set_session_options_context(options: Optional[Dict[str, Any]]) -> None:
-    """
-    Set current session options context for tool execution.
-    
-    Args:
-        options: Dictionary with translation options or None to clear context
-    """
     global _current_session_options
     _current_session_options = options
 
-
-def get_translation_queue() -> Optional[queue.Queue]:
-    """Get the current translation streaming queue (thread-safe)."""
+def get_translation_queue() -> Optional[asyncio.Queue]:
     return _current_translation_queue
 
-
-def set_translation_queue(q: Optional[queue.Queue]) -> None:
-    """Set the translation streaming queue for the current session."""
+def set_translation_queue(q: Optional[asyncio.Queue]) -> None:
     global _current_translation_queue
     _current_translation_queue = q
 
+def set_current_session_id(session_id: Optional[str]) -> None:
+    global _current_session_id
+    _current_session_id = session_id
 
 async def emit_translation_chunk(chunk: str) -> None:
-    """
-    Emit a translation chunk to the streaming queue.
-    
-    Args:
-        chunk: Translation chunk to emit
-    """
     queue = get_translation_queue()
     if queue is not None:
         await queue.put({"type": "translation_chunk", "data": chunk})
 
+# --- New Data Structures for Ralph AST ---
 
-def parse_import_line(line: str) -> str:
+class Field(BaseModel):
+    name: str = PydanticField(..., description="Name of the field")
+    type: str = PydanticField(..., description="Ralph type of the field (e.g. U256, Address, Bool)")
+
+class MapDef(BaseModel):
+    key_type: Literal["Bool", "U256", "I256", "Address", "ByteVec"]
+    value_type: str
+
+class Constant(BaseModel):
+    name: str
+    type: str
+    value: str
+
+class EnumValue(BaseModel):
+    name: str
+    value: int
+
+class RalphEnum(BaseModel):
+    name: str
+    values: List[EnumValue]
+
+class RalphEvent(BaseModel):
+    name: str
+    fields: List[Field]
+
+# --- Tool Input Schemas ---
+
+class EventDef(BaseModel):
+    name: str = PydanticField(..., description="Name of the event")
+    fields: List[Field] = PydanticField(default=[], description="List of fields in the event")
+
+class Contract(BaseModel):
+    name: str
+    abstract: bool
+    fields_immutable: List[Field] = []
+    fields_mutable: List[Field] = []
+    parent_contracts: List[str] = []
+    parent_interfaces: List[str] = []
+    maps: Dict[str, MapDef] = {}
+    events: List[RalphEvent] = []
+    consts: List[Constant] = []
+    enums: List[RalphEnum] = []
+    methods: str = "" # Body of methods (Ralph code)
+
+class Interface(BaseModel):
+    name: str
+    parents: List[str] = []
+    events: List[RalphEvent] = []
+    public_methods: str = "" # Definitions of public methods
+
+class Struct(BaseModel):
+    name: str
+    fields: List[Field]
+
+class RalphSource(BaseModel):
+    global_structs: List[Struct] = []
+    global_enums: List[RalphEnum] = []
+    global_consts: List[Constant] = []
+    interfaces: Dict[str, Interface] = {}
+    contracts: Dict[str, Contract] = {}
+
+    def render(self) -> str:
+        """Renders the entire Ralph source code from the AST."""
+        lines = []
+        TWO_EMPTY_LINES = ["", ""]
+
+        # 1. Global constants
+        if self.global_consts:
+            for g_const in self.global_consts:
+                lines.append(f"const {g_const.name}: {g_const.type} = {g_const.value}") 
+            lines.extend(TWO_EMPTY_LINES)
+
+        # 2. Global Enums
+        for g_enum in self.global_enums:
+            lines.append(f"enum {g_enum.name} {{")
+            for enum_val in g_enum.values:
+                lines.append(f"    {enum_val.name} = {enum_val.value}")
+            lines.append("}")
+            lines.extend(TWO_EMPTY_LINES)
+
+        # 3. Global Structs
+        for g_struct in self.global_structs:
+            lines.append(f"struct {g_struct.name} {{")
+            for struct_field in g_struct.fields:
+                lines.append(f"    {struct_field.name}: {struct_field.type},") 
+            lines.append("}")
+            lines.extend(TWO_EMPTY_LINES)
+
+        # 4. Interfaces
+        for iname, iface in self.interfaces.items():
+            parents = ""
+            if iface.parents:
+                parents = f" extends {', '.join(iface.parents)}"
+            lines.append(f"Interface {iname}{parents} {{")
+            
+            if iface.events:
+                for iface_event in iface.events:
+                    fields = ", ".join([f"{f.name}: {f.type}" for f in iface_event.fields])
+                    lines.append(f"    event {iface_event.name}({fields})")
+                lines.extend(TWO_EMPTY_LINES)
+            
+            if iface.public_methods:
+                lines.append(f"    {iface.public_methods.strip()}")
+            lines.append("}")
+            lines.extend(TWO_EMPTY_LINES)
+
+        # 5. Contracts
+        for cname, contr in self.contracts.items():
+            abstract = "Abstract " if contr.abstract else ""
+            
+            # Inheritance Logic: Resolve parent contract arguments and infer missing fields
+            parent_calls = []
+            additional_params = []
+            existing_field_names = set(f.name for f in contr.fields_immutable) | set(f.name for f in contr.fields_mutable)
+
+            for parent_name in contr.parent_contracts:
+                if parent_name in self.contracts:
+                    parent = self.contracts[parent_name]
+                    p_args = []
+                    
+                    # Process parent fields to build args and infer missing ones on child
+                    for pf in parent.fields_immutable:
+                        p_args.append(pf.name)
+                        if pf.name not in existing_field_names:
+                            additional_params.append(f"{pf.name}: {pf.type}  // required by {parent_name}")
+                            existing_field_names.add(pf.name)
+                    
+                    for pf in parent.fields_mutable:
+                        p_args.append(pf.name)
+                        if pf.name not in existing_field_names:
+                            additional_params.append(f"mut {pf.name}: {pf.type}  // required by {parent_name}")
+                            existing_field_names.add(pf.name)
+                            
+                    parent_calls.append(f"{parent_name}({', '.join(p_args)})")
+                else:
+                    # Parent is likely a built-in or interface, or not found in AST
+                    parent_calls.append(parent_name)
+            
+            parents_str = ""
+            if parent_calls:
+                parents_str = f" extends {', '.join(parent_calls)}"
+
+            implements_str = ""
+            if contr.parent_interfaces:
+                implements_str = f" implements {', '.join(contr.parent_interfaces)}"
+            
+            params = []
+            for f in contr.fields_immutable:
+                params.append(f"{f.name}: {f.type}")
+            for f in contr.fields_mutable:
+                params.append(f"mut {f.name}: {f.type}")
+            
+            # Add the inferred fields
+            params.extend(additional_params)
+            
+            if len(params) == 0:
+                params_str = ""
+            else:
+                params_str = "\n  " + ",\n  ".join(params) + "\n"
+            
+            lines.append(f"{abstract}Contract {cname}({params_str}){parents_str}{implements_str} {{")
+            
+            # Inner constructs
+            if contr.events:
+                for c_event in contr.events:
+                    fields = ", ".join([f"{f.name}: {f.type}" for f in c_event.fields])
+                    lines.append(f"  event {c_event.name}({fields})")
+                lines.append("")
+
+            if contr.consts:
+                for c_const in contr.consts:
+                     lines.append(f"  const {c_const.name} = {c_const.value}")
+                lines.append("")
+
+            for c_enum in contr.enums:
+                lines.append(f"  enum {c_enum.name} {{")
+                for v in c_enum.values:
+                    lines.append(f"    {v.name} = {v.value}")
+                lines.append("  }")
+                lines.append("")
+
+            # Maps
+            if contr.maps:
+                for map_name, map_def in contr.maps.items():
+                    lines.append(f"  mapping[{map_def.key_type}, {map_def.value_type}] {map_name}")
+                lines.append("")
+            
+            if contr.methods:
+                # Indent methods
+                method_lines = contr.methods.strip().split('\n')
+                for ml in method_lines:
+                    lines.append(f"  {ml}")
+
+            lines.append("}")
+            lines.extend(TWO_EMPTY_LINES)
+
+        return "\n".join(lines)
+
+
+# --- Session Storage ---
+
+_sessions: Dict[str, RalphSource] = {}
+
+def get_session_source() -> RalphSource:
+    if not _current_session_id:
+        raise ValueError("No active session ID")
+    if _current_session_id not in _sessions:
+        _sessions[_current_session_id] = RalphSource()
+    return _sessions[_current_session_id]
+
+def _safe_parse_fields(fields: Any) -> List[Field]:
+    """Helper to safely parse fields that might be malformed by the LLM."""
+    if not isinstance(fields, list):
+        return []
+    
+    parsed = []
+    for f in fields:
+        if isinstance(f, dict):
+            try:
+                parsed.append(Field(**f))
+            except Exception:
+                continue
+        elif isinstance(f, str):
+            # Attempt to parse "name: type" string
+            if ":" in f:
+                parts = f.split(":", 1)
+                parsed.append(Field(name=parts[0].strip(), type=parts[1].strip()))
+    return parsed
+
+
+# --- Helper for human readable logs ---
+
+# We can rely on StreamEvent.tool_start to show the action, 
+# provided the tool name and input is descriptive enough. 
+# But the requirement says "display... in short form ex. 'Creating contract MyContract'".
+# We will ensure our tools return descriptive strings or the UI handles it.
+# The `agent_service.py` typically emits `tool_start` with `tool` and `input`.
+
+# --- Tools Definitions ---
+
+@tool
+def createContract(name: str, abstract: bool, parentInterfaces: List[str], parentContracts: List[str], fieldsImmutable: List[Field], fieldsMutable: List[Field]) -> str:
     """
-    Extracts the import path from a Solidity import statement.
-
-    Supports:
-      - Simple: import "path";
-      - Named: import {A, B} from "path";
-      - Wildcard: import * as name from 'path';
-
+    Creates a new Contract definition in the Ralph source.
+    Naming convention:
+        - Contract name MUST start with an uppercase letter.
+        - Field names MUST start with a lowercase letter.
     Args:
-        line: A single line of Solidity code
-
-    Returns:
-        The import path (without quotes), or empty string if not a valid import.
+        name: Name of the contract.
+        abstract: Whether it is abstract.
+        parentInterfaces: List of parent interfaces.
+        parentContracts: List of parent contracts to extend.
+        fieldsImmutable: List of immutable fields (constants that are set on contract creation).
+        fieldsMutable: List of mutable fields (mutable state vars).
     """
-    line = line.strip()
-    if not line.startswith("import "):
-        return ""
+    source = get_session_source()
+    if name in source.contracts:
+        return f"Error: Contract {name} already exists."
+    
+    if not name[0].isupper():
+        return f"Error: Contract name '{name}' must start with an uppercase letter."
+    
+    for f in fieldsImmutable:
+        if not f.name[0].islower():
+            return f"Error: Immutable field '{f.name}' must start with a lowercase letter."
+    for f in fieldsMutable:
+        if not f.name[0].islower():
+            return f"Error: Mutable field '{f.name}' must start with a lowercase letter."
 
-    # Try "from" style: import ... from "path" or import ... from 'path'
-    match = re.search(r'from\s+["\']([^"\']+)["\']', line)
-    if match:
-        return match.group(1)
+    contract = Contract(
+        name=name,
+        abstract=abstract,
+        parent_contracts=parentContracts,
+        parent_interfaces=parentInterfaces,
+        fields_immutable=fieldsImmutable,
+        fields_mutable=fieldsMutable
+    )
+    source.contracts[name] = contract
+    return f"Created contract {name}"
 
-    # Try simple style: import "path" or import 'path'
-    match = re.search(r'import\s+["\']([^"\']+)["\']', line)
-    if match:
-        return match.group(1)
+@tool
+def createInterface(name: str, parents: List[str]) -> str:
+    """Creates a new Interface definition."""
+    source = get_session_source()
+    if name in source.interfaces:
+        return f"Error: Interface {name} already exists."
+    source.interfaces[name] = Interface(name=name, parents=parents)
+    return f"Created interface {name}"
 
-    return ""
+@tool
+def createGlobalStruct(struct: Struct) -> str:
+    """Creates a global struct. Field names must start with a lowercase letter."""
+    source = get_session_source()
+    if not struct.name[0].isupper():
+        return f"Error: Struct name '{struct.name}' must start with an uppercase letter."
+    for f in struct.fields:
+        if not f.name[0].islower():
+            return f"Error: Struct field '{f.name}' must start with a lowercase letter."
+    source.global_structs.append(struct)
+    return f"Created global struct {struct.name}"
 
+@tool
+def createGlobalEnum(enum: RalphEnum) -> str:
+    """Creates a global enum. Enum names and enum values must start with an uppercase letter."""
+    source = get_session_source()
+    if not enum.name[0].isupper():
+        return f"Error: Enum name '{enum.name}' must start with an uppercase letter."
+    for v in enum.values:
+        if not v.name[0].isupper():
+             return f"Error: Enum value '{v.name}' must start with an uppercase letter."
+    source.global_enums.append(enum)
+    return f"Created global enum {enum.name}"
 
-# Define stage types
+@tool
+def createGlobalConstant(constant: Constant) -> str:
+    """
+    Creates a global constant. 
+    It is recommended to use SCREAMING_SNAKE_CASE for constant names.
+    The name MUST start with an uppercase letter.
+    """
+    source = get_session_source()
+    if not constant.name[0].isupper():
+        return f"Error: Constant '{constant.name}' must start with an uppercase letter."
+    source.global_consts.append(constant)
+    return f"Created global constant {constant.name}"
+
+# Interface Scope Tools
+
+@tool
+def replaceFunctionDeclarations(interfaceName: str, functionDeclarations: str) -> str:
+    """Replaces the body of an interface with provided function declarations."""
+    source = get_session_source()
+    if interfaceName not in source.interfaces:
+        return f"Error: Interface {interfaceName} not found."
+    source.interfaces[interfaceName].public_methods = functionDeclarations
+    return f"Updated function declarations for interface {interfaceName}"
+
+@tool
+def addEventsToInterface(interfaceName: str, events: List[EventDef]) -> str:
+    """Adds events to an interface. Event field names must start with a lowercase letter."""
+    source = get_session_source()
+    if interfaceName not in source.interfaces:
+        return f"Error: Interface {interfaceName} not found."
+    
+    for e in events:
+        for f in e.fields:
+            if not f.name[0].islower():
+                return f"Error: Event field '{f.name}' in event '{e.name}' must start with a lowercase letter."
+    
+    parsed_events = [RalphEvent(name=e.name, fields=e.fields) for e in events]
+    source.interfaces[interfaceName].events.extend(parsed_events)
+    return f"Added {len(parsed_events)} events to interface {interfaceName}"
+
+# Contract Scope Tools
+
+@tool
+def replaceFunctionDefinitions(contractName: str, functionDefinitions: str) -> str:
+    """
+    Replaces the body of a contract with provided function definitions.
+    Use this to add the Logic/Methods to the contract.
+    """
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    source.contracts[contractName].methods = functionDefinitions
+    return f"Updated function definitions for contract {contractName}"
+
+@tool
+def addMutableFieldsToContract(contractName: str, fields: List[Field]) -> str:
+    """Adds mutable fields to a contract. Field names must start with a lowercase letter."""
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    for f in fields:
+        if not f.name[0].islower():
+            return f"Error: Mutable field '{f.name}' must start with a lowercase letter."
+    source.contracts[contractName].fields_mutable.extend(fields)
+    return f"Added {len(fields)} mutable fields to {contractName}"
+
+@tool
+def addImmutableFieldsToContract(contractName: str, fields: List[Field]) -> str:
+    """Adds immutable fields (constructor params) to a contract. Field names must start with a lowercase letter."""
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    for f in fields:
+        if not f.name[0].islower():
+            return f"Error: Immutable field '{f.name}' must start with a lowercase letter."
+    source.contracts[contractName].fields_immutable.extend(fields)
+    return f"Added {len(fields)} immutable fields to {contractName}"
+
+@tool
+def removeImmutableFieldFromContract(contractName: str, fieldName: str) -> str:
+    """Removes an immutable field from a contract."""
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    source.contracts[contractName].fields_immutable = [f for f in source.contracts[contractName].fields_immutable if f.name != fieldName]
+    return f"Removed immutable field {fieldName} from {contractName}"
+
+@tool
+def removeMutableFieldFromContract(contractName: str, fieldName: str) -> str:
+    """Removes a mutable field from a contract."""
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    source.contracts[contractName].fields_mutable = [f for f in source.contracts[contractName].fields_mutable if f.name != fieldName]
+    return f"Removed mutable field {fieldName} from {contractName}"
+
+@tool
+def addMapsToContract(contractName: str, maps: List[Dict[str, Any]]) -> str:
+    """Adds maps to a contract. Input list of {name, key_type, value_type}."""
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    for m in maps:
+        if not isinstance(m, dict):
+            continue
+        # Assuming format {name: 'foo', key_type: 'Address', value_type: 'U256'}
+        # But MapDef expects key_type, value_type
+        # We need to parse correctly.
+        # The schema in requirements: Map: {key_type: "Bool" | "U256" | "I256" | "Address" | "ByteVec", value_type: string }
+        # And Contract has "maps: Map[]" which implies name is somewhere.
+        # Reworked.md says: `addMapsToContract(contractName: string, maps: Map[]): void`
+        # But `Contract` struct in reworked.md says `maps: Map[]`. 
+        # Map definition in reworked.md: `{key_type: ..., value_type: ...}`. It misses the NAME.
+        # I will assume the input dictionary has a 'name' field for the map variable name.
+        m_name = m.get('name')
+        if not m_name:
+            continue
+        key_type = m.get('key_type')
+        value_type = m.get('value_type')
+        if not key_type or not value_type:
+            continue
+        source.contracts[contractName].maps[m_name] = MapDef(key_type=key_type, value_type=value_type)
+    return f"Added {len(maps)} maps to {contractName}"
+
+@tool
+def addEventsToContract(contractName: str, events: List[EventDef]) -> str:
+    """Adds events to a contract. Event field names must start with a lowercase letter."""
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    
+    for e in events:
+        for f in e.fields:
+            if not f.name[0].islower():
+                return f"Error: Event field '{f.name}' in event '{e.name}' must start with a lowercase letter."
+    
+    parsed_events = []
+    for e in events:
+        # e is now a Pydantic object, not a dict
+        parsed_events.append(RalphEvent(name=e.name, fields=e.fields))
+    
+    source.contracts[contractName].events.extend(parsed_events)
+    return f"Added {len(parsed_events)} events to {contractName}"
+
+@tool
+def addConstantsToContract(contractName: str, constants: List[Constant]) -> str:
+    """
+    Adds constants to a contract.
+    It is recommended to use SCREAMING_SNAKE_CASE for constant names.
+    The name MUST start with an uppercase letter.
+    """
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    for c in constants:
+        if not c.name[0].isupper():
+            return f"Error: Constant '{c.name}' must start with an uppercase letter."
+    source.contracts[contractName].consts.extend(constants)
+    return f"Added {len(constants)} constants to {contractName}"
+
+@tool
+def addEnumsToContract(contractName: str, enums: List[RalphEnum]) -> str:
+    """Adds enums to a contract. Enum names and enum values must start with an uppercase letter."""
+    source = get_session_source()
+    if contractName not in source.contracts:
+        return f"Error: Contract {contractName} not found."
+    
+    for e in enums:
+        if not e.name[0].isupper():
+            return f"Error: Enum name '{e.name}' must start with an uppercase letter."
+        for v in e.values:
+            if not v.name[0].isupper():
+                return f"Error: Enum value '{v.name}' in enum '{e.name}' must start with an uppercase letter."
+    
+    source.contracts[contractName].enums.extend(enums)
+    return f"Added {len(enums)} enums to {contractName}"
+
+@tool
+def lookupTranslation(solidityClassNameOrInterface: str) -> str:
+    """Looks up a translation for a known Solidity class or interface (like IERC20)."""
+    # Simple dictionary lookup for now.
+    predefined = {
+        "IERC20": "Interface IERC20 { ... }", # Placeholder
+        "ERC20": "Contract ERC20(...) { ... }", # Placeholder
+    }
+    return predefined.get(solidityClassNameOrInterface, "Translation not found.")
+
+@tool
+def finalizeandRenderTranslation() -> str:
+    """
+    Finalizes the translation creation process and returns the full Ralph source code.
+    Call this when you have finished reconstructing the contract.
+    """
+    source = get_session_source()
+    return source.render()
+
+# --- Stream Event & Agent ---
+
 AgentStage = Literal[
-    "thinking",
-    "using_tool",
-    "reading_code",
-    "preprocessing",
-    "translating",
-    "generating",
-    "fetching_docs",
-    "completing",
-    "done",
+    "thinking", "using_tool", "reading_code", "preprocessing",
+    "translating", "generating", "fetching_docs", "completing", "done", "analysing", "fixing"
 ]
 
-
 class StreamEvent:
-    """Factory for creating stream events."""
-
     @staticmethod
     def content(chunk: str) -> Dict[str, Any]:
-        """Content chunk event."""
         return {"type": "content", "data": chunk}
-
+    
     @staticmethod
     def translation_chunk(chunk: str) -> Dict[str, Any]:
-        """Translation chunk event - streamed directly from translator."""
         return {"type": "translation_chunk", "data": chunk}
 
     @staticmethod
     def stage(stage: AgentStage, message: str = "") -> Dict[str, Any]:
-        """Stage change event."""
-        stage_messages = {
-            "thinking": "🤔 Analyzing your request...",
-            "using_tool": "🔧 Preparing tools...",
-            "reading_code": "📖 Reading your code...",
-            "preprocessing": "📦 Resolving imports...",
-            "translating": "🔄 Translating to Ralph...",
-            "generating": "✨ Generating code...",
-            "fetching_docs": "📚 Fetching documentation...",
-            "completing": "✅ Finalizing response...",
-            "done": "✓ Complete",
-        }
-
-        return {
-            "type": "stage",
-            "data": {"stage": stage, "message": message or stage_messages.get(stage, "Processing...")},
-        }
+        return {"type": "stage", "data": {"stage": stage, "message": message}}
 
     @staticmethod
     def tool_start(tool_name: str, tool_input: str) -> Dict[str, Any]:
-        """Tool execution start event."""
-        return {
-            "type": "tool_start",
-            "data": {"tool": tool_name, "input": tool_input[:100] + "..." if len(tool_input) > 100 else tool_input},
-        }
+        return {"type": "tool_start", "data": {"tool": tool_name, "input": tool_input}}
 
     @staticmethod
     def tool_end(tool_name: str, success: bool = True) -> Dict[str, Any]:
-        """Tool execution end event."""
         return {"type": "tool_end", "data": {"tool": tool_name, "success": success}}
 
     @staticmethod
+    def code_snapshot(code: str) -> Dict[str, Any]:
+        return {"type": "code_snapshot", "data": code}
+
+    @staticmethod
     def error(error_message: str) -> Dict[str, Any]:
-        """Error event."""
         return {"type": "error", "data": {"message": error_message}}
 
-
 class ChatAgent:
-    """LangChain v1 agent for code generation and assistance."""
-
     def __init__(self):
-        """Initialize the agent with tools."""
-        
-        # Main agent LLM - lower temperature for more deterministic tool usage
+        # Tools list
+        self.tools = [
+            createContract, createInterface, createGlobalStruct, createGlobalEnum, createGlobalConstant,
+            replaceFunctionDeclarations, addEventsToInterface,
+            replaceFunctionDefinitions, addMutableFieldsToContract, addImmutableFieldsToContract,
+            removeImmutableFieldFromContract, removeMutableFieldFromContract,
+            addMapsToContract, addEventsToContract, addConstantsToContract, addEnumsToContract,
+            lookupTranslation, finalizeandRenderTranslation
+        ]
+
+        # LLM
         self.llm = ChatOpenAI(
             model=AGENT_MODEL,
-            temperature=0.1,  # Low temperature to prefer tool calls over text generation
+            temperature=0.1,
             api_key=API_KEY,
             base_url=API_URL,
         )
         
-        # Separate LLM for fixing tool (uses LLM_MODEL for better quality fixes)
         self.fix_llm = ChatOpenAI(
             model=LLM_MODEL,
-            temperature=0.3,  # Lower temperature for more precise fixes
+            temperature=0.3, # Higher temp for creativity in fixing
             api_key=API_KEY,
             base_url=API_URL,
         )
 
-        # Define tools
-        self.tools = self._create_tools()
-
-        # Create agent using create_agent
-        self.system_prompt = self._get_system_prompt()
-        self.agent = create_agent(
-            model=self.llm,
-            tools=self.tools,
-            system_prompt=self.system_prompt,
-        )
-
-        # Session storage for conversation history
-        self.sessions: Dict[str, List[Dict[str, str]]] = {}
-        
-        # Session storage for translation options
-        self.session_options: Dict[str, Dict[str, Any]] = {}
-
-    def _create_tools(self) -> List:
-        """Create tools the agent can use."""
-
-        @tool
-        def resolve_solidity_imports(code: str) -> str:
-            """
-            Resolves Solidity import statements by replacing them with actual contract code.
-            CRITICAL: ALWAYS use this tool FIRST if the code contains 'import' statements.
-            """
-            POSTFIX = """The code has been uploaded to the mainframe and it is waiting for a translate_evm_to_ralph to execute the translation.
-
-DO NOT OUTPUT ANY REASONING ABOUT THIS TOOL'S USAGE, GO STRAIGHT TO NEXT TOOL CALL
-NEXT STEP: Use translate_evm_to_ralph with this preprocessed code."""
-            try:
-                logger.warning(f"Resolving imports for code of length: {len(code)}")
-                if "import" not in code:
-                    logger.warning("No imports detected in code")
-                    return "✓ No imports detected. Code is ready for translation. " + POSTFIX
-
-                from translate_oz import replace_imports
-
-                # Extract imports from each line
-                imports = [parse_import_line(line) for line in code.split("\n")]
-                imports = [imp for imp in imports if imp]
-
-                if not imports:
-                    logger.warning("No import statements found in code")
-                    return "✓ No import statements found. Code is ready for translation." + POSTFIX
-
-                logger.warning(f"Found {len(imports)} import(s): {imports}")
-
-                # Replace imports with their implementations
-                replacement_text = replace_imports(imports)
-                # Remove import lines from code
-                code_lines = code.split("\n")
-                code_without_imports = "\n".join([line for line in code_lines if not line.strip().startswith("import ")])
-                preprocessed_code = f"/* IMPORTS_START */\n{replacement_text}\n/* IMPORTS_END */\n\n{code_without_imports}"
-
-                logger.warning(f"Imports resolved. New code length: {len(preprocessed_code)}")
-
-                return f"✓ Imports successfully resolved! Found and resolved {len(imports)} import(s)." + POSTFIX
-
-
-
-            except Exception as e:
-                logger.error(f"Import resolution error: {e}", exc_info=True)
-                return f"❌ Error resolving imports: {str(e)}"
-
-        @tool
-        async def translate_evm_to_ralph(code: str) -> str:
-            """
-            Translates EVM/Solidity code to Ralph language for Alephium blockchain.
-            
-            Uses the translation preferences set by the user at the beginning of the conversation.
-            These preferences control optimization, comments, and other translation behaviors.
-
-            IMPORTANT: If the code contains 'import' statements, use resolve_solidity_imports FIRST.
-            """
-
-            try:
-                logger.warning(f"Starting translation for code of length: {len(code)}")
-                # Safety fallback: check if imports are still present
-                # if "import" in code and ("@openzeppelin" in code.lower() or ".sol" in code):
-                #     logger.warning("⚠️ Code contains imports but wasn't preprocessed! Preprocessing now...")
-                #     from translate_oz import replace_imports
-
-                #     imports = [parse_import_line(line) for line in code.split("\n")]
-                #     imports = [imp for imp in imports if imp]
-
-                #     if imports:
-                #         logger.warning(f"Fallback preprocessing: Found {len(imports)} import(s)")
-                #         replacement_text = replace_imports(imports)
-                #         code_lines = code.split("\n")
-                #         code = "\n".join([line for line in code_lines if not line.strip().startswith("import ")])
-                #         code = f"{replacement_text}\n\n{code}"
-                #         logger.warning("Fallback preprocessing completed")
-
-                # Get options from session context
-                session_opts = get_current_session_options()
-                logger.warning(f"Using session options: {session_opts}")
-
-                # Create translation request with session options
-                request = TranslateRequest(
-                    source_code=code,
-                    options=TranslationOptions(
-                        optimize=session_opts.get("optimize", False),
-                        include_comments=session_opts.get("include_comments", True),
-                        mimic_defaults=session_opts.get("mimic_defaults", False),
-                        translate_erc20=session_opts.get("translate_erc20", False),
-                        smart=session_opts.get("smart", False),
-                    ),
-                )
-
-                chunk_queue = get_translation_queue()
-                
-                # Run translation directly in this async context, streaming chunks
-                translated = ""
-                async for chunk, _, _, _ in perform_translation(request, stream=True):
-                    if chunk:
-                        translated += chunk
-                        # Push chunk to thread-safe queue for immediate streaming
-                        if chunk_queue is not None:
-                            chunk_queue.put(StreamEvent.translation_chunk(chunk))
-
-                logger.warning(f"Translation completed. Output length: {len(translated)}")
-                
-                # Return just a confirmation - the actual code was already streamed via chunks
-                return "✓ Translation complete. The Ralph code has been generated."
-            except Exception as e:
-                logger.error(f"Translation tool error: {e}", exc_info=True)
-                return f"Error translating code: {str(e)}"
-
-        @tool
-        def get_ralph_documentation() -> str:
-            """Returns Ralph language documentation and examples."""
-            return TRANSLATION_SYSTEM_PROMPT
-
-        @tool
-        def generate_ralph_template(contract_type: str) -> str:
-            """Generates a Ralph contract template (token, nft, marketplace)."""
-            templates = {
-                "token": """### Ralph Token Template
-
-```ralph
-Contract Token(symbol: ByteVec, name: ByteVec, decimals: U256, supply: U256) {
-    event Transfer(from: Address, to: Address, amount: U256)
-
-    @using(preapprovedAssets = true, checkExternalCaller = false)
-    pub fn transfer(to: Address, amount: U256) -> () {
-        transferTokenFromSelf!(to, selfTokenId!(), amount)
-        emit Transfer(callerAddress!(), to, amount)
-    }
-}
-```
-
-Key features:
-- Constructor parameters capture token metadata and initial supply
-- `transfer` uses `transferTokenFromSelf!` to move the native token held by the contract
-- Emits a `Transfer` event that matches common token semantics
-
-Extend this template with tracking state (balances, allowances) for a fully fledged FT.
-""",
-                "nft": """### Ralph NFT Template
-
-```ralph
-Contract NFT(collectionId: ByteVec, mut owner: Address, mut tokenURI: ByteVec) {
-    event Transfer(from: Address, to: Address, tokenId: ByteVec)
-
-    @using(updateFields = true, checkExternalCaller = false)
-    pub fn transferNFT(to: Address) -> () {
-        checkCaller!(callerAddress!() == owner, ErrorCodes.Unauthorized)
-        owner = to
-        emit Transfer(callerAddress!(), to, collectionId)
-    }
-
-    enum ErrorCodes {
-        Unauthorized = 0
-    }
-}
-```
-
-Extend with metadata storage, minting helpers, or royalties as needed.
-""",
-                "marketplace": """### Ralph Marketplace Template
-
-```ralph
-Contract Marketplace(mut owner: Address) {
-    mapping[ByteVec, Listing] listings
-
-    struct Listing {
-        seller: Address,
-        price: U256,
-        active: Bool
-    }
-
-    @using(updateFields = true)
-    pub fn listItem(tokenId: ByteVec, price: U256) -> () {
-        assert!(!listings.contains!(tokenId), ErrorCodes.AlreadyListed)
-        listings.insert!(tokenId, Listing { seller: callerAddress!(), price: price, active: true })
-    }
-
-    enum ErrorCodes {
-        AlreadyListed = 0
-    }
-}
-```
-
-Add buying, cancelation, and fee logic to suit your use case.
-""",
-            }
-
-            return templates.get(contract_type.lower(), "Template not found. Available: token, nft, marketplace")
-
-        @tool
-        def fix_ralph_code(ralph_code: str, error: str) -> str:
-            """
-            Fixes Ralph code based on a compilation error.
-            
-            Use this tool when you need to fix Ralph code that failed to compile.
-            Analyzes the error message and applies targeted fixes.
-            
-            Args:
-                ralph_code: The Ralph code that failed to compile
-                error: The compilation error message
-            
-            Returns:
-                Fixed Ralph code
-            """
-            # This tool is a marker - the actual fixing is done by the LLM
-            # The tool just structures the input for the agent
-            return f"""Please fix this Ralph code based on the compilation error.
-
-COMPILATION ERROR:
-{error}
-
-RALPH CODE TO FIX:
-```ralph
-{ralph_code}
-```
-
-Analyze the error carefully and return ONLY the fixed Ralph code.
-Do not include any explanation, just the corrected code."""
-
-        return [resolve_solidity_imports, translate_evm_to_ralph, get_ralph_documentation, generate_ralph_template, fix_ralph_code]
-
-    def _get_system_prompt(self) -> str:
-        """Build the system prompt for the agent."""
-        return (
+        # Prompt
+        system_prompt = (
             "You are HenryBot, an expert AI assistant for Alephium blockchain development and Ralph smart contract programming.\n\n"
             f"{TRANSLATION_SYSTEM_PROMPT}\n\n"
-            "Your capabilities:\n"
-            "- Translate EVM/Solidity code to Ralph language\n"
-            "- Resolve Solidity import statements (OpenZeppelin, etc.)\n"
-            "- Answer questions about Ralph syntax and best practices\n"
-            "- Generate Ralph contract templates\n"
-            "- Debug and improve Ralph code\n\n"
-            "CRITICAL WORKFLOW FOR CODE WITH IMPORTS:\n"
-            "1. Check if the code contains at least one 'import' statement\n"
-            "2. If YES → MUST use `resolve_solidity_imports` tool BEFORE `translate_evm_to_ralph`\n"
-            "3. Then use translate_evm_to_ralph with the preprocessed code\n\n"
-            "CRITICAL OUTPUT RULES - YOU MUST FOLLOW THESE:\n"
-            "- For ANY code translation request: ONLY use tools. DO NOT output any text before, during, or after tool calls.\n"
-            "- NEVER explain what you're about to do - just call the tool immediately.\n"
-            "- NEVER summarize or comment on the translation result - the code streams directly to the user.\n"
-            "- NEVER say things like 'I'll translate this' or 'Here's the translation' - just use the tool.\n"
-            "- ONLY respond with text if the user asks a direct question that doesn't involve code translation.\n"
-            "- Your text output is NOT displayed to the user - only tool results are shown.\n"
-            "- Be silent and efficient: tool call only, no chatter."
+            "AGENCY INSTRUCTIONS:\n"
+            "You are now acting as a State-Action Agent using a set of granular tools to build a Ralph contract structure from scratch.\n"
+            "Instead of outputting code directly, you MUST use the provided tools to build the 'RalphSource' AST.\n"
+            "1. Analyze the input Solidity code.\n"
+            "2. Identify all Contracts, Interfaces, Structs, Enums, and Constants.\n"
+            "3. Use `createContract`, `createInterface`, etc. to assert their existence.\n"
+            "4. Use `addMutableFieldsToContract`, `addImmutableFieldsToContract`, `addMapsToContract`, etc. to populate them.\n"
+            "5. Translate logic and methods, then use `replaceFunctionDefinitions` or `replaceFunctionDeclarations` to inject them.\n"
+            "6. FINALLY, call `finalizeandRenderTranslation` to get the result string and return it to the user.\n"
+            "\n"
+            "You must orchestrate this process step-by-step. Do not hallucinate tools."
         )
+
+        self.agent = create_agent(self.llm, self.tools, system_prompt=system_prompt)
+        self.sessions: Dict[str, List[Dict[str, str]]] = {}
+        self.session_options: Dict[str, Dict[str, Any]] = {}
+
+    def set_session_options(self, session_id: str, options: Dict[str, Any]) -> None:
+        self.session_options[session_id] = options
+
+    def get_session_options(self, session_id: str) -> Dict[str, Any]:
+        return self.session_options.get(session_id, {
+            "optimize": False,
+            "include_comments": True,
+            "mimic_defaults": False,
+            "smart": False,
+            "translate_erc20": False,
+        })
+    
+    def clear_session(self, session_id: str) -> None:
+        if session_id in self.sessions:
+            del self.sessions[session_id]
+        if session_id in self.session_options:
+            del self.session_options[session_id]
+        if session_id in _sessions:
+            del _sessions[session_id]
 
     async def chat(
         self,
@@ -499,231 +703,80 @@ Do not include any explanation, just the corrected code."""
         stream: bool = True,
         options: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Process a chat message and yield streaming events.
-
-        Args:
-            message: User's message
-            session_id: Session identifier for conversation history
-            stream: Whether to stream the response
-            options: Translation options (stored in session on first message)
-
-        Yields:
-            Dict with event type and data
-        """
-        # Create a thread-safe queue for translation chunks (written from tool thread)
-        translation_chunk_queue: queue.Queue = queue.Queue()
-        # Create an async queue for agent events
-        agent_event_queue: asyncio.Queue = asyncio.Queue()
         
+        # State Management
+        set_current_session_id(session_id)
+        if options:
+            self.set_session_options(session_id, options)
+        session_opts = self.get_session_options(session_id)
+        set_session_options_context(session_opts)
+        
+        # Translation queue for real-time code chunks if needed (used by tools if they emit chunks)
+        translation_chunk_queue: asyncio.Queue = asyncio.Queue()
+        set_translation_queue(translation_chunk_queue)
+
         try:
-            # Initial stage
-            yield StreamEvent.stage("thinking", "Analyzing your request...")
+            yield StreamEvent.stage("thinking", "Analyzing...")
 
-            # Check if message contains code
-            if "```" in message or any(
-                keyword in message.lower() for keyword in ["translate", "convert", "code", "contract"]
-            ):
-                yield StreamEvent.stage("reading_code", "Detecting code in your message...")
-
-            # Get or create message history for this session
             if session_id not in self.sessions:
                 self.sessions[session_id] = []
-
-            # Store options if provided (typically on first message)
-            if options is not None:
-                self.set_session_options(session_id, options)
-                logger.info(f"Options set for session {session_id}: {options}")
-
-            # Set session context for tools to access
-            session_opts = self.get_session_options(session_id)
-            set_session_options_context(session_opts)
-            set_translation_queue(translation_chunk_queue)
-            logger.info(f"Session context set with options: {session_opts}")
-
-            # Invoke the agent with streaming
-            full_response = ""
-            agent_done = False
-            translation_completed = False  # Flag to suppress content after translation
             
-            try:
-                yield StreamEvent.stage("generating", "Processing...")
+            chat_history = self.sessions[session_id]
 
-                async def run_agent_and_emit_events():
-                    """Run the agent and push all events to the async queue."""
-                    nonlocal full_response, agent_done, translation_completed
-                    try:
-                        async for event in self.agent.astream_events({"messages": [{"role": "user", "content": message}]}):
-                            event_type = event.get("event")
-
-                            if event_type == "on_tool_start":
-                                tool_name = event.get("name", "unknown")
-                                await agent_event_queue.put(StreamEvent.stage("using_tool"))
-                                await agent_event_queue.put(StreamEvent.tool_start(tool_name, message[:100]))
-                                if tool_name == "translate_evm_to_ralph":
-                                    await agent_event_queue.put(StreamEvent.stage("translating", "🔄 Translating to Ralph..."))
-
-                            elif event_type == "on_tool_end":
-                                tool_name = event.get("name", "unknown")
-                                tool_data = event.get("data", {})
-                                tool_output = tool_data.get("output")
-                                
-                                # Mark translation as complete to suppress further content streaming
-                                if tool_name == "translate_evm_to_ralph":
-                                    translation_completed = True
-                                    # Signal immediate completion - no need to wait for agent to finish
-                                    await agent_event_queue.put(StreamEvent.tool_end(tool_name))
-                                    await agent_event_queue.put(StreamEvent.stage("done"))
-                                    return  # Exit the agent loop immediately
-                                
-                                # Extract string content from ToolMessage
-                                if tool_output:
-                                    if hasattr(tool_output, 'content'):
-                                        output_text = tool_output.content
-                                    elif isinstance(tool_output, str):
-                                        output_text = tool_output
-                                    elif isinstance(tool_output, dict):
-                                        output_text = tool_output.get("output", "")
-                                    else:
-                                        output_text = str(tool_output)
-                                    
-                                    # For non-translation tools, send the output as content
-                                    if tool_name != "translate_evm_to_ralph" and output_text:
-                                        await agent_event_queue.put(StreamEvent.content(output_text))
-                                await agent_event_queue.put(StreamEvent.tool_end(tool_name))
-
-                            elif event_type == "on_chat_model_stream":
-                                # Skip content streaming after translation is complete
-                                if translation_completed:
-                                    continue
-                                chunk = event.get("data", {}).get("chunk")
-                                if chunk and hasattr(chunk, "content"):
-                                    content = chunk.content
-                                    if content:
-                                        full_response += content
-                                        await agent_event_queue.put(StreamEvent.content(content))
-
-                            elif event_type == "on_chain_end":
-                                # Skip final content after translation is complete
-                                if translation_completed:
-                                    continue
-                                output = event.get("data", {}).get("output")
-                                if isinstance(output, str):
-                                    final_text = output
-                                elif isinstance(output, dict):
-                                    final_text = output.get("output", "")
-                                else:
-                                    final_text = str(output)
-
-                                if final_text:
-                                    full_response += final_text
-                                    await agent_event_queue.put(StreamEvent.content(final_text))
-                    except Exception as e:
-                        logger.error(f"Agent error: {e}", exc_info=True)
-                        await agent_event_queue.put(StreamEvent.error(f"Error: {str(e)}"))
-                    finally:
-                        agent_done = True
-
-                # Start the agent in a background task
-                agent_task = asyncio.create_task(run_agent_and_emit_events())
-
-                # Consume events from both queues - poll thread-safe queue and async queue
-                while not agent_done or not translation_chunk_queue.empty() or not agent_event_queue.empty():
-                    # First, drain all available translation chunks (thread-safe queue)
-                    while True:
-                        try:
-                            chunk_event = translation_chunk_queue.get_nowait()
-                            yield chunk_event
-                        except queue.Empty:
-                            break
-                    
-                    # Then, try to get an agent event with a short timeout
-                    try:
-                        event = await asyncio.wait_for(agent_event_queue.get(), timeout=0.05)
-                        yield event
-                        
-                        # Check if this was the "done" stage - exit early
-                        if event.get("type") == "stage" and event.get("data", {}).get("stage") == "done":
-                            # Cancel agent task since we're done
-                            agent_task.cancel()
-                            try:
-                                await agent_task
-                            except asyncio.CancelledError:
-                                pass
-                            break
-                    except asyncio.TimeoutError:
-                        # No agent event available, continue polling
-                        pass
+            # Yield events for the frontend
+            yield StreamEvent.stage("generating", "Building Ralph Source...")
+            
+            final_output = ""
+            
+            # We process the stream from the compiled graph
+            async for event in self.agent.astream_events(
+                {"messages": chat_history + [{"role": "user", "content": message}]},
+                version="v1"
+            ):
+                kind = event["event"]
                 
-                # Final drain of any remaining chunks
-                while True:
+                if kind == "on_tool_start":
+                    name = event.get('name', 'unknown_tool')
+                    inputs = event['data'].get('input')
+                    # format input for display if it's a dict
+                    input_str = str(inputs)
+                    yield StreamEvent.tool_start(name, input_str)
+                
+                elif kind == "on_tool_end":
+                    name = event.get('name', 'unknown_tool')
+                    yield StreamEvent.tool_end(name, success=True)
+                    # Render and yield code snapshot after each tool
                     try:
-                        chunk_event = translation_chunk_queue.get_nowait()
-                        yield chunk_event
-                    except queue.Empty:
-                        break
+                        source = get_session_source()
+                        code_snapshot = source.render()
+                        yield StreamEvent.code_snapshot(code_snapshot)
+                    except Exception as render_err:
+                        logger.warning(f"Failed to render code snapshot: {render_err}")
+                
+                elif kind == "on_chain_end":
+                    # In LangGraph, we look for the final message from the model
+                    # But simpler to look for "on_chat_model_stream" or "on_chat_model_end" for content
+                    pass
+                
+                elif kind == "on_chat_model_stream":
+                    # We can stream tokens if we want, but for tool usage we often want the final result
+                    # But the requirement asks for tool events mostly.
+                    # If there is content output (non-tool), we can capture it.
+                    chunk = event['data'].get('chunk')
+                    if chunk and hasattr(chunk, 'content') and chunk.content:
+                         final_output += chunk.content
+                         # If we want to stream text content to user:
+                         # yield StreamEvent.content(chunk.content))
 
-                # Wait for agent task to complete if not already done
-                if not agent_task.done():
-                    await agent_task
-
-                # Store message in history
-                self.sessions.setdefault(session_id, [])
-                self.sessions[session_id].append({"role": "user", "content": message})
-                self.sessions[session_id].append({"role": "assistant", "content": full_response})
-
-                yield StreamEvent.stage("done")
-
-            except Exception as e:
-                logger.error(f"Agent invocation error: {e}", exc_info=True)
-                yield StreamEvent.error(f"Error: {str(e)}")
-            finally:
-                # Clean up session context after execution
-                set_session_options_context(None)
-                set_translation_queue(None)
-                logger.info("Session context cleaned up")
-
-        except Exception as e:
-            logger.error(f"Chat agent error: {e}", exc_info=True)
-            yield StreamEvent.error(f"Error: {str(e)}")
-
-    def set_session_options(self, session_id: str, options: Dict[str, Any]) -> None:
-        """
-        Store translation options for a session.
-        
-        Args:
-            session_id: Session identifier
-            options: Dictionary with translation options
-        """
-        self.session_options[session_id] = options
-        logger.info(f"Stored options for session {session_id}: {options}")
-
-    def get_session_options(self, session_id: str) -> Dict[str, Any]:
-        """
-        Get translation options for a session.
-        
-        Args:
-            session_id: Session identifier
+            yield StreamEvent.stage("done")
             
-        Returns:
-            Dictionary with translation options or default values
-        """
-        return self.session_options.get(session_id, {
-            "optimize": False,
-            "include_comments": True,
-            "mimic_defaults": False,
-            "smart": False,
-            "translate_erc20": False,
-        })
-
-    def clear_session(self, session_id: str) -> None:
-        """Clear conversation history for a session."""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-            logger.info(f"Cleared session: {session_id}")
-        if session_id in self.session_options:
-            del self.session_options[session_id]
-            logger.info(f"Cleared options for session: {session_id}")
+        except Exception as e:
+            logger.error(f"Error in chat: {e}", exc_info=True)
+            yield StreamEvent.error(str(e))
+        finally:
+            set_current_session_id(None)
+            set_session_options_context(None)
+            set_translation_queue(None)
 
     async def fix_code(
         self,
@@ -734,38 +787,17 @@ Do not include any explanation, just the corrected code."""
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Fix Ralph code based on a compilation error.
-        
-        Iterates up to max_iterations times, attempting to fix the code
-        and verify compilation success. Yields stage events for progress tracking.
-        
-        Args:
-            ralph_code: The Ralph code that failed to compile
-            error: The compilation error message
-            solidity_code: Optional original Solidity code for context
-            max_iterations: Maximum number of fix attempts
-            
-        Yields:
-            Stage events and final result event
+        Iterates up to max_iterations times.
         """
         current_code = ralph_code
         current_error = error
         iterations = 0
         
-        # Stage 1: Analysing the error
         yield StreamEvent.stage("analysing", "🔍 Analysing the error...")
         
-        # Build context section if Solidity code is provided
         solidity_context = ""
         if solidity_code:
-            solidity_context = f"""
-## Original Solidity Code (for reference)
-The Ralph code was translated from this Solidity code. Use it to understand the INTENDED functionality.
-CRITICAL: The fixed Ralph code MUST implement ALL functionality from the original Solidity.
-
-```solidity
-{solidity_code}
-```
-"""
+            solidity_context = f"## Original Solidity Code\\n```solidity\\n{solidity_code}\\n```\\n"
         
         fix_system_prompt = f"""You are an expert Ralph smart contract developer.
 Your task is to fix Ralph code that has compilation errors.
@@ -778,29 +810,16 @@ Your task is to fix Ralph code that has compilation errors.
 2. You MUST keep ALL existing code - every function, every field, every event, every line
 3. NEVER delete or simplify code - only modify the specific broken syntax
 4. NEVER return a shorter or simpler version of the contract
-5. If there's a function with 50 lines, the fixed version must have ~50 lines with the same logic
-6. Return ONLY the complete fixed Ralph code with ALL original functionality preserved
-7. Do NOT include any explanation, markdown, or comments about what you changed
-8. Do NOT wrap the code in ```ralph``` blocks
-
-EXAMPLE OF WHAT NOT TO DO:
-- Original has 200 lines with 10 functions -> Fixed has 4 lines with no functions = WRONG
-- Original has batchTransfer logic -> Fixed removes the logic = WRONG
-
-CORRECT APPROACH:
-- Find the specific error (e.g., wrong syntax on line 45)
-- Fix ONLY that line/syntax issue
-- Return the COMPLETE code with all 200 lines, 10 functions, etc.
+5. Return ONLY the complete fixed Ralph code with ALL original functionality preserved
+6. Do NOT include any explanation, markdown, or comments about what you changed
+7. Do NOT wrap the code in ```ralph``` blocks
 """
 
         for iteration in range(max_iterations):
             iterations += 1
             logger.info(f"Fix iteration {iterations}/{max_iterations}")
-            
-            # Stage: Fixing iteration
             yield StreamEvent.stage("fixing", f"🔧 Fixing the code (iteration {iterations}/{max_iterations})...")
             
-            # Create a focused fix prompt
             fix_prompt = f"""Fix this Ralph code compilation error.
 
 ERROR MESSAGE TO FIX:
@@ -808,19 +827,15 @@ ERROR MESSAGE TO FIX:
 
 COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
 {current_code}
-
-REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only fix the specific compilation error above. Do not simplify or remove any code."""
+"""
 
             try:
-                # Use dedicated fix_llm (LLM_MODEL) for focused fixing
                 response = await self.fix_llm.ainvoke([
                     {"role": "system", "content": fix_system_prompt},
                     {"role": "user", "content": fix_prompt}
                 ])
                 
                 fixed_code = response.content.strip()
-                
-                # Clean up any markdown code blocks if LLM added them
                 fixed_code = self._extract_ralph_code(fixed_code)
                 
                 if not fixed_code:
@@ -829,7 +844,7 @@ REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only 
                 
                 current_code = fixed_code
                 
-                # Try to compile the fixed code
+                # Check compilation
                 compile_result = await self._compile_ralph_code(fixed_code)
                 
                 if compile_result["success"]:
@@ -845,7 +860,6 @@ REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only 
                     }
                     return
                 else:
-                    # Update error for next iteration
                     current_error = compile_result.get("error", "Unknown compilation error")
                     logger.info(f"Compilation still failing: {current_error[:100]}...")
                     
@@ -853,8 +867,6 @@ REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only 
                 logger.error(f"Fix iteration {iterations} failed: {e}", exc_info=True)
                 continue
         
-        # Return best effort after max iterations
-        logger.warning(f"Fix failed after {max_iterations} iterations")
         yield StreamEvent.stage("done", "⚠️ Fix complete (with remaining errors)")
         yield {
             "type": "result",
@@ -866,32 +878,15 @@ REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only 
         }
 
     def _extract_ralph_code(self, text: str) -> str:
-        """Extract Ralph code from LLM response, removing markdown blocks."""
-        # Remove markdown code blocks
-        ralph_match = re.search(r'```ralph\s*\n([\s\S]*?)```', text)
+        ralph_match = re.search(r'```ralph\\s*\\n([\\s\\S]*?)```', text)
         if ralph_match:
             return ralph_match.group(1).strip()
-        
-        # Try generic code blocks
-        code_match = re.search(r'```\s*\n?([\s\S]*?)```', text)
+        code_match = re.search(r'```\\s*\\n?([\\s\\S]*?)```', text)
         if code_match:
             return code_match.group(1).strip()
-        
-        # Return as-is if no code blocks
         return text.strip()
 
     async def _compile_ralph_code(self, code: str) -> Dict[str, Any]:
-        """
-        Attempt to compile Ralph code using the Alephium node.
-        
-        Args:
-            code: Ralph code to compile
-            
-        Returns:
-            Dict with success status and optional error message
-        """
-        import aiohttp
-        
         node_url = os.getenv("NODE_URL", "https://node.testnet.alephium.org")
         compile_endpoint = f"{node_url}/contracts/compile-project"
         
@@ -908,36 +903,21 @@ REMINDER: Return the COMPLETE code with ALL functions and logic preserved. Only 
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    compile_endpoint,
-                    json=compile_request,
-                    headers={"Content-Type": "application/json"}
-                ) as response:
-                    if response.status == 200:
+                async with session.post(compile_endpoint, json=compile_request) as resp:
+                    if resp.status == 200:
                         return {"success": True}
                     else:
-                        error_data = await response.json()
-                        error_msg = error_data.get("detail", str(error_data))
-                        
-                        # Check for abstract contract message (not a real error)
-                        if "Code generation is not supported for abstract contract" in error_msg:
-                            return {"success": True}
-                        
-                        return {"success": False, "error": error_msg}
+                        error_text = await resp.text()
+                        return {"success": False, "error": error_text}
         except Exception as e:
             logger.error(f"Compilation check failed: {e}")
             return {"success": False, "error": str(e)}
 
-
-# Global agent instance
+# Global Instance
 _agent: Optional[ChatAgent] = None
 
-
 def get_agent() -> ChatAgent:
-    """Get or create the global chat agent instance."""
     global _agent
     if _agent is None:
-        logger.info("Initializing ChatAgent...")
         _agent = ChatAgent()
-        logger.info("ChatAgent initialized successfully")
     return _agent

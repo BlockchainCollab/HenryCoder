@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field as PydanticField, field_validator
 
 from api_types import TranslateRequest, TranslationOptions
 from translation_context import RALPH_DETAILS
-from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT
+from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT, perform_fim_translation
 
 # Type for translation chunk callback
 TranslationChunkCallback = Callable[[str], None]
@@ -49,6 +49,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "mistralai/devstral-2512:free")
 _current_session_options: Optional[Dict[str, Any]] = None
 _current_translation_queue: Optional[asyncio.Queue] = None
 _current_session_id: Optional[str] = None
+_current_solidity_source: Optional[str] = None
 
 def get_current_session_options() -> Dict[str, Any]:
     if _current_session_options:
@@ -75,6 +76,13 @@ def set_translation_queue(q: Optional[asyncio.Queue]) -> None:
 def set_current_session_id(session_id: Optional[str]) -> None:
     global _current_session_id
     _current_session_id = session_id
+
+def get_current_solidity_source() -> Optional[str]:
+    return _current_solidity_source
+
+def set_current_solidity_source(source: Optional[str]) -> None:
+    global _current_solidity_source
+    _current_solidity_source = source
 
 async def emit_translation_chunk(chunk: str) -> None:
     queue = get_translation_queue()
@@ -144,8 +152,8 @@ class RalphSource(BaseModel):
     interfaces: Dict[str, Interface] = {}
     contracts: Dict[str, Contract] = {}
 
-    def render(self) -> str:
-        """Renders the entire Ralph source code from the AST."""
+    def render(self, tag_body: None | str = None) -> str:
+        """Renders the entire Ralph source code from the AST. Tag body allows tagging body of a specific contract or interface to assist in translation efforts with <|fim_start|> <|fim_end|>."""
         lines = []
         TWO_EMPTY_LINES = ["", ""]
 
@@ -182,10 +190,16 @@ class RalphSource(BaseModel):
                 for iface_event in iface.events:
                     fields = ", ".join([f"{f.name}: {f.type}" for f in iface_event.fields])
                     lines.append(f"    event {iface_event.name}({fields})")
-                lines.extend(TWO_EMPTY_LINES)
+                lines.append("")
             
-            if iface.public_methods:
-                lines.append(f"    {iface.public_methods.strip()}")
+            if iface.public_methods or tag_body == iname:
+                if tag_body == iname:
+                    lines.append("  <|fim_start|>")
+                if iface.public_methods:
+                    lines.append(f"  {iface.public_methods.strip()}")
+                if tag_body == iname:
+                    lines.append("  <|fim_end|>")
+
             lines.append("}")
             lines.extend(TWO_EMPTY_LINES)
 
@@ -246,17 +260,26 @@ class RalphSource(BaseModel):
             lines.append(f"{abstract}Contract {cname}({params_str}){parents_str}{implements_str} {{")
             
             # Inner constructs
+            # 1. Maps
+            if contr.maps:
+                for map_name, map_def in contr.maps.items():
+                    lines.append(f"  mapping[{map_def.key_type}, {map_def.value_type}] {map_name}")
+                lines.append("")
+
+            # 2. Events
             if contr.events:
                 for c_event in contr.events:
                     fields = ", ".join([f"{f.name}: {f.type}" for f in c_event.fields])
                     lines.append(f"  event {c_event.name}({fields})")
                 lines.append("")
 
+            # 3. Consts
             if contr.consts:
                 for c_const in contr.consts:
                      lines.append(f"  const {c_const.name} = {c_const.value}")
                 lines.append("")
 
+            # 4. Enums
             for c_enum in contr.enums:
                 lines.append(f"  enum {c_enum.name} {{")
                 for v in c_enum.values:
@@ -264,17 +287,21 @@ class RalphSource(BaseModel):
                 lines.append("  }")
                 lines.append("")
 
-            # Maps
-            if contr.maps:
-                for map_name, map_def in contr.maps.items():
-                    lines.append(f"  mapping[{map_def.key_type}, {map_def.value_type}] {map_name}")
-                lines.append("")
-            
-            if contr.methods:
-                # Indent methods
-                method_lines = contr.methods.strip().split('\n')
-                for ml in method_lines:
-                    lines.append(f"  {ml}")
+            # 5. Methods
+            if contr.methods or tag_body == cname:
+                if tag_body == cname:
+                    lines.append("<|fim_start|>")
+                
+                # if contr.methods:
+                #     # Indent methods
+                #     method_lines = contr.methods.strip().split('\n')
+                #     for ml in method_lines:
+                #         lines.append(f"  {ml}")
+                # it's multiline content, but maybe it will work
+                lines.append("  " + contr.methods)
+                
+                if tag_body == cname:
+                    lines.append("<|fim_end|>")
 
             lines.append("}")
             lines.extend(TWO_EMPTY_LINES)
@@ -412,15 +439,6 @@ def createGlobalConstant(constant: Constant) -> str:
 # Interface Scope Tools
 
 @tool
-def replaceFunctionDeclarations(interfaceName: str, functionDeclarations: str) -> str:
-    """Replaces the body of an interface with provided function declarations."""
-    source = get_session_source()
-    if interfaceName not in source.interfaces:
-        return f"Error: Interface {interfaceName} not found."
-    source.interfaces[interfaceName].public_methods = functionDeclarations
-    return f"Updated function declarations for interface {interfaceName}"
-
-@tool
 def addEventsToInterface(interfaceName: str, events: List[EventDef]) -> str:
     """Adds events to an interface. Event field names must start with a lowercase letter."""
     source = get_session_source()
@@ -439,16 +457,66 @@ def addEventsToInterface(interfaceName: str, events: List[EventDef]) -> str:
 # Contract Scope Tools
 
 @tool
-def replaceFunctionDefinitions(contractName: str, functionDefinitions: str) -> str:
+async def translateFunctions(interfaceOrContractName: str) -> str:
     """
-    Replaces the body of a contract with provided function definitions.
-    Use this to add the Logic/Methods to the contract.
+    Translates the functions/methods for a specific Contract or Interface.
+    It uses the original Solidity source code (from the chat session) and the current partial Ralph structure.
+    It automatically fills in the code using an advanced FIM (Fill-In-the-Middle) LLM.
+    Args:
+        interfaceOrContractName: The name of the contract or interface to populate methods for.
     """
     source = get_session_source()
-    if contractName not in source.contracts:
-        return f"Error: Contract {contractName} not found."
-    source.contracts[contractName].methods = functionDefinitions
-    return f"Updated function definitions for contract {contractName}"
+    if interfaceOrContractName not in source.contracts and interfaceOrContractName not in source.interfaces:
+        return f"Error: {interfaceOrContractName} not found in contracts or interfaces."
+
+    solidity_code = get_current_solidity_source()
+    if not solidity_code:
+        return "Error: No Solidity source code found in current session context. Please provide the source code."
+
+    # Render with FIM tags
+    try:
+        ralph_structure = source.render(tag_body=interfaceOrContractName)
+    except Exception as e:
+        return f"Error rendering Ralph structure: {e}"
+
+    full_content = ""
+    queue = get_translation_queue()
+
+    try:
+        if queue:
+            # Notify UI
+            await queue.put({"type": "stage", "data": {"stage": "translating", "message": f"Translating methods for {interfaceOrContractName}..."}})
+        
+        # Determine if we should use the smart model based on session options
+        session_opts = get_current_session_options()
+        is_smart = session_opts.get("smart", False)
+
+        async for chunk, reasoning, warnings, errors in perform_fim_translation(solidity_code, ralph_structure, smart=is_smart):
+            if chunk:
+                full_content += chunk
+                if queue:
+                    await queue.put({"type": "translation_chunk", "data": chunk})
+        
+    except Exception as e:
+        logger.error(f"FIM translation failed: {e}")
+        return f"Error during translation: {e}"
+
+    # Clean content
+    cleaned_content = full_content.strip()
+    # Remove markdown code blocks if present
+    if "```" in cleaned_content:
+        match = re.search(r'```(?:ralph)?(.*?)```', cleaned_content, re.DOTALL)
+        if match:
+            cleaned_content = match.group(1).strip()
+        else:
+             cleaned_content = "\n".join([l for l in cleaned_content.split('\n') if not l.strip().startswith("```")])
+
+    if interfaceOrContractName in source.contracts:
+        source.contracts[interfaceOrContractName].methods = cleaned_content
+    elif interfaceOrContractName in source.interfaces:
+        source.interfaces[interfaceOrContractName].public_methods = cleaned_content
+    
+    return f"Successfully translated and updated functions for {interfaceOrContractName}."
 
 @tool
 def addMutableFieldsToContract(contractName: str, fields: List[Field]) -> str:
@@ -584,7 +652,7 @@ def lookupTranslation(solidityClassNameOrInterface: str) -> str:
     return predefined.get(solidityClassNameOrInterface, "Translation not found.")
 
 @tool
-def finalizeandRenderTranslation() -> str:
+def finalizeAndRenderTranslation() -> str:
     """
     Finalizes the translation creation process and returns the full Ralph source code.
     Call this when you have finished reconstructing the contract.
@@ -633,11 +701,11 @@ class ChatAgent:
         # Tools list
         self.tools = [
             createContract, createInterface, createGlobalStruct, createGlobalEnum, createGlobalConstant,
-            replaceFunctionDeclarations, addEventsToInterface,
-            replaceFunctionDefinitions, addMutableFieldsToContract, addImmutableFieldsToContract,
+            addEventsToInterface,
+            translateFunctions, addMutableFieldsToContract, addImmutableFieldsToContract,
             removeImmutableFieldFromContract, removeMutableFieldFromContract,
             addMapsToContract, addEventsToContract, addConstantsToContract, addEnumsToContract,
-            lookupTranslation, finalizeandRenderTranslation
+            lookupTranslation, finalizeAndRenderTranslation
         ]
 
         # LLM
@@ -666,8 +734,8 @@ class ChatAgent:
             "2. Identify all Contracts, Interfaces, Structs, Enums, and Constants.\n"
             "3. Use `createContract`, `createInterface`, etc. to assert their existence.\n"
             "4. Use `addMutableFieldsToContract`, `addImmutableFieldsToContract`, `addMapsToContract`, etc. to populate them.\n"
-            "5. Translate logic and methods, then use `replaceFunctionDefinitions` or `replaceFunctionDeclarations` to inject them.\n"
-            "6. FINALLY, call `finalizeandRenderTranslation` to get the result string and return it to the user.\n"
+            "5. Translate logic and methods by calling `translateFunctions` for each contract/interface. This uses FIM to intelligently implement the body.\n"
+            "6. FINALLY, call `finalizeAndRenderTranslation` to get the result string and return it to the user.\n"
             "\n"
             "You must orchestrate this process step-by-step. Do not hallucinate tools."
         )
@@ -710,6 +778,9 @@ class ChatAgent:
             self.set_session_options(session_id, options)
         session_opts = self.get_session_options(session_id)
         set_session_options_context(session_opts)
+        
+        # Store the current message as the solidity source for translation context
+        set_current_solidity_source(message)
         
         # Translation queue for real-time code chunks if needed (used by tools if they emit chunks)
         translation_chunk_queue: asyncio.Queue = asyncio.Queue()

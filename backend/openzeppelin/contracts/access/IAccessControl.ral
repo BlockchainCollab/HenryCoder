@@ -1,3 +1,4 @@
+// Ralph translation of OpenZeppelin IAccessControl.sol
 Interface IAccessControl {
   event RoleAdminChanged(role: ByteVec, previousAdminRole: ByteVec, newAdminRole: ByteVec)
   event RoleGranted(role: ByteVec, account: Address, sender: Address)

@@ -312,6 +312,7 @@ class RalphSource(BaseModel):
 # --- Session Storage ---
 
 _sessions: Dict[str, RalphSource] = {}
+_session_locks: Dict[str, asyncio.Lock] = {}
 
 def get_session_source() -> RalphSource:
     if not _current_session_id:
@@ -319,6 +320,13 @@ def get_session_source() -> RalphSource:
     if _current_session_id not in _sessions:
         _sessions[_current_session_id] = RalphSource()
     return _sessions[_current_session_id]
+
+def get_session_lock() -> asyncio.Lock:
+    if not _current_session_id:
+        raise ValueError("No active session ID")
+    if _current_session_id not in _session_locks:
+        _session_locks[_current_session_id] = asyncio.Lock()
+    return _session_locks[_current_session_id]
 
 def _safe_parse_fields(fields: Any) -> List[Field]:
     """Helper to safely parse fields that might be malformed by the LLM."""
@@ -473,50 +481,54 @@ async def translateFunctions(interfaceOrContractName: str) -> str:
     if not solidity_code:
         return "Error: No Solidity source code found in current session context. Please provide the source code."
 
-    # Render with FIM tags
-    try:
-        ralph_structure = source.render(tag_body=interfaceOrContractName)
-    except Exception as e:
-        return f"Error rendering Ralph structure: {e}"
+    # Use a lock to ensure sequential execution of translation tasks for the same session
+    lock = get_session_lock()
+    async with lock:
+        # Render with FIM tags - re-fetch source inside lock to ensure latest state
+        # (Though source object is mutable reference, so self.source is fine, but rendering needs to be atomic w.r.t other updates)
+        try:
+            ralph_structure = source.render(tag_body=interfaceOrContractName)
+        except Exception as e:
+            return f"Error rendering Ralph structure: {e}"
 
-    full_content = ""
-    queue = get_translation_queue()
+        full_content = ""
+        queue = get_translation_queue()
 
-    try:
-        if queue:
-            # Notify UI
-            await queue.put({"type": "stage", "data": {"stage": "translating", "message": f"Translating methods for {interfaceOrContractName}..."}})
+        try:
+            if queue:
+                # Notify UI
+                await queue.put({"type": "stage", "data": {"stage": "translating", "message": f"Translating methods for {interfaceOrContractName}..."}})
+            
+            # Determine if we should use the smart model based on session options
+            session_opts = get_current_session_options()
+            is_smart = session_opts.get("smart", False)
+
+            async for chunk, reasoning, warnings, errors in perform_fim_translation(solidity_code, ralph_structure, smart=is_smart):
+                if chunk:
+                    full_content += chunk
+                    if queue:
+                        await queue.put({"type": "translation_chunk", "data": chunk})
+            
+        except Exception as e:
+            logger.error(f"FIM translation failed: {e}")
+            return f"Error during translation: {e}"
+
+        # Clean content
+        cleaned_content = full_content.strip()
+        # Remove markdown code blocks if present
+        if "```" in cleaned_content:
+            match = re.search(r'```(?:ralph)?(.*?)```', cleaned_content, re.DOTALL)
+            if match:
+                cleaned_content = match.group(1).strip()
+            else:
+                cleaned_content = "\n".join([l for l in cleaned_content.split('\n') if not l.strip().startswith("```")])
+
+        if interfaceOrContractName in source.contracts:
+            source.contracts[interfaceOrContractName].methods = cleaned_content
+        elif interfaceOrContractName in source.interfaces:
+            source.interfaces[interfaceOrContractName].public_methods = cleaned_content
         
-        # Determine if we should use the smart model based on session options
-        session_opts = get_current_session_options()
-        is_smart = session_opts.get("smart", False)
-
-        async for chunk, reasoning, warnings, errors in perform_fim_translation(solidity_code, ralph_structure, smart=is_smart):
-            if chunk:
-                full_content += chunk
-                if queue:
-                    await queue.put({"type": "translation_chunk", "data": chunk})
-        
-    except Exception as e:
-        logger.error(f"FIM translation failed: {e}")
-        return f"Error during translation: {e}"
-
-    # Clean content
-    cleaned_content = full_content.strip()
-    # Remove markdown code blocks if present
-    if "```" in cleaned_content:
-        match = re.search(r'```(?:ralph)?(.*?)```', cleaned_content, re.DOTALL)
-        if match:
-            cleaned_content = match.group(1).strip()
-        else:
-             cleaned_content = "\n".join([l for l in cleaned_content.split('\n') if not l.strip().startswith("```")])
-
-    if interfaceOrContractName in source.contracts:
-        source.contracts[interfaceOrContractName].methods = cleaned_content
-    elif interfaceOrContractName in source.interfaces:
-        source.interfaces[interfaceOrContractName].public_methods = cleaned_content
-    
-    return f"Successfully translated and updated functions for {interfaceOrContractName}."
+        return f"Successfully translated and updated functions for {interfaceOrContractName}."
 
 @tool
 def addMutableFieldsToContract(contractName: str, fields: List[Field]) -> str:
@@ -681,12 +693,12 @@ class StreamEvent:
         return {"type": "stage", "data": {"stage": stage, "message": message}}
 
     @staticmethod
-    def tool_start(tool_name: str, tool_input: str) -> Dict[str, Any]:
-        return {"type": "tool_start", "data": {"tool": tool_name, "input": tool_input}}
+    def tool_start(tool_name: str, tool_input: str, run_id: Optional[str] = None) -> Dict[str, Any]:
+        return {"type": "tool_start", "data": {"tool": tool_name, "input": tool_input, "run_id": run_id}}
 
     @staticmethod
-    def tool_end(tool_name: str, success: bool = True) -> Dict[str, Any]:
-        return {"type": "tool_end", "data": {"tool": tool_name, "success": success}}
+    def tool_end(tool_name: str, success: bool = True, run_id: Optional[str] = None) -> Dict[str, Any]:
+        return {"type": "tool_end", "data": {"tool": tool_name, "success": success, "run_id": run_id}}
 
     @staticmethod
     def code_snapshot(code: str) -> Dict[str, Any]:
@@ -793,9 +805,6 @@ class ChatAgent:
                 self.sessions[session_id] = []
             
             chat_history = self.sessions[session_id]
-
-            # Yield events for the frontend
-            yield StreamEvent.stage("generating", "Building Ralph Source...")
             
             final_output = ""
             
@@ -805,17 +814,18 @@ class ChatAgent:
                 version="v1"
             ):
                 kind = event["event"]
+                run_id = event.get("run_id")
                 
                 if kind == "on_tool_start":
                     name = event.get('name', 'unknown_tool')
                     inputs = event['data'].get('input')
                     # format input for display if it's a dict
                     input_str = str(inputs)
-                    yield StreamEvent.tool_start(name, input_str)
+                    yield StreamEvent.tool_start(name, input_str, run_id)
                 
                 elif kind == "on_tool_end":
                     name = event.get('name', 'unknown_tool')
-                    yield StreamEvent.tool_end(name, success=True)
+                    yield StreamEvent.tool_end(name, success=True, run_id=run_id)
                     # Render and yield code snapshot after each tool
                     try:
                         source = get_session_source()

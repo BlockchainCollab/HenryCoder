@@ -111,3 +111,22 @@ def replace_imports(imports: list[str]) -> str:
                 replacements[interface_lib] = interface_content
 
     return "\n\n".join(replacements.values())
+
+### Agentic system overhauled imports
+
+def get_pretranslated_libs() -> dict[str, str]:
+    """Return a dict of available OpenZeppelin imports and generic class names and their replacement text for agentic model.
+    
+    The keys are simply class names (ex. 'Ownable') and the values are the replacement text or ignore text.
+    """
+    res: dict[str, str] = {}
+
+    for lib, explanation in IGNORED_IMPORTS.items():
+        class_name = lib.split("/")[-1].replace(".sol", "")
+        comment = f"// {class_name} is not needed in Ralph."
+        res[lib] = explanation + "\n" + comment
+
+    for lib, content in REPLACEMENT_LIBS.items():
+        res[lib] = content
+
+    return res

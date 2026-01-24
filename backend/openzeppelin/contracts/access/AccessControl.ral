@@ -1,3 +1,4 @@
+// Ralph translation of OpenZeppelin AccessControl.sol
 Abstract Contract AccessControl() implements IAccessControl {
   // Mappings to simulate nested structure
   // For hasRole: key is encodeToByteVec!(role, account), value is Bool

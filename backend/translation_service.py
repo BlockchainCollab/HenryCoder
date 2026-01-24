@@ -134,8 +134,6 @@ async def perform_fim_translation(
         "Please generate the code to fill the <|fim_start|> ... <|fim_end|> block."
     )
 
-    print(ralph_code)
-
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}

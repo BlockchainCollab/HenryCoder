@@ -117,16 +117,20 @@ def replace_imports(imports: list[str]) -> str:
 def get_pretranslated_libs() -> dict[str, str]:
     """Return a dict of available OpenZeppelin imports and generic class names and their replacement text for agentic model.
     
-    The keys are simply class names (ex. 'Ownable') and the values are the replacement text or ignore text.
+    The keys are simply class names in lowercase (ex. 'ownable') and the values are the replacement text or ignore text.
     """
     res: dict[str, str] = {}
 
     for lib, explanation in IGNORED_IMPORTS.items():
         class_name = lib.split("/")[-1].replace(".sol", "")
         comment = f"// {class_name} is not needed in Ralph."
-        res[lib] = explanation + "\n" + comment
+        res[class_name.lower()] = explanation + "\n" + comment
 
     for lib, content in REPLACEMENT_LIBS.items():
-        res[lib] = content
+        class_name = lib.split("/")[-1].replace(".sol", "")
+        res[class_name.lower()] = content
 
     return res
+
+# Preload the pretranslated libs for use in agent_service (keys are class/interface names in lowercase)"""
+PRETRANSLATED_LIBS = get_pretranslated_libs()

@@ -73,22 +73,9 @@ Check whether the map contains a bindiing for the key
 ---
 
 ## Asset Functions
----
-### approveToken
+In all asset functions used in contracts it is VERY IMPORTANT to set the correct @using annotations in functions which use asset operations.
+For your convenience **REQUIRED ANNOTATION** has been added to each description.
 
-```ralph
-fn approveToken!(fromAddress: Address, tokenId: ByteVec, amount: U256) -> ()
-```
-
-Approves the usage of certain amount of token from the given address
-
-> @param **fromAddress** *the address to approve token from*
->
-> @param **tokenId** *the token to be approved*
->
-> @param **amount** *the amount of the token to be approved*
->
-> @returns
 
 ---
 
@@ -98,9 +85,12 @@ Approves the usage of certain amount of token from the given address
 fn tokenRemaining!(address: Address, tokenId: ByteVec) -> (U256)
 ```
 
-Returns the amount of the remaining token amount in the input assets of the function. The calling function must have @using(assetsInContract=true) or @using(preapprovedAssets=true) or both specified
+**REQUIRED ANNOTATION**
+assetsInContract = true (if checking contract's own assets)
+preapprovedAssets = true (if checking external caller's approved assets)
 
-> @param **address** *the input address*
+
+> @param **address** *the address to check*
 >
 > @param **tokenId** *the token id*
 >
@@ -113,6 +103,9 @@ Returns the amount of the remaining token amount in the input assets of the func
 ```ralph
 fn transferToken!(fromAddress: Address, toAddress: Address, tokenId: ByteVec, amount: U256) -> ()
 ```
+
+**REQUIRED ANNOTATION**
+preapprovedAssets = true
 
 Transfers token from the input assets of the function.
 
@@ -134,7 +127,10 @@ Transfers token from the input assets of the function.
 fn transferTokenFromSelf!(toAddress: Address, tokenId: ByteVec, amount: U256) -> ()
 ```
 
-Transfers the contract's token from the input assets of the function. The toAddress must not be the same as the contract address. The calling function must specify @using(assetsInContract = true) for this to work
+**REQUIRED ANNOTATION**
+assetsInContract = true
+
+Transfers the contract's token from the input assets of the function. The toAddress must not be the same as the contract address.
 
 > @param **toAddress** *the address to transfer token to*
 >
@@ -151,6 +147,10 @@ Transfers the contract's token from the input assets of the function. The toAddr
 ```ralph
 fn transferTokenToSelf!(fromAddress: Address, tokenId: ByteVec, amount: U256) -> ()
 ```
+
+**REQUIRED ANNOTATION**
+preapprovedAssets = true
+payTocontractOnly = true XOR assetsInContract = true
 
 Transfers token to the contract from the input assets of the function. The fromAddress must not be the same as the contract address.
 
@@ -170,6 +170,10 @@ Transfers token to the contract from the input assets of the function. The fromA
 fn burnToken!(address: Address, tokenId: ByteVec, amount: U256) -> ()
 ```
 
+**REQUIRED ANNOTATION**
+preapprovedAssets = true (if burning from external caller's assets)
+assetsInContract = true (if burning contract's own assets)
+
 Burns token from the input assets of the function.
 
 > @param **address** *the address to burn token from*
@@ -188,6 +192,9 @@ Burns token from the input assets of the function.
 fn lockApprovedAssets!(address: Address, timestamp: U256) -> ()
 ```
 
+**REQUIRED ANNOTATION**
+preapprovedAssets = true
+
 Locks the current approved assets.
 
 > @param **address** *the address to lock assets to*
@@ -203,6 +210,10 @@ Locks the current approved assets.
 ```ralph
 fn payGasFee!(payer: Address, amount: U256) -> ()
 ```
+
+**REQUIRED ANNOTATION**
+assetsInContract = true (if paying gas fee from contract's own assets)
+preapprovedAssets = true (if paying gas fee from external caller's approved assets)
 
 Pay gas fee.
 

@@ -831,7 +831,9 @@ const translateCodeInner = async (
       activeTools.value.push({ id, name: tool, input });
 
       // Update progress step based on tool being started
-      if (tool === 'createContract' || tool === 'createInterface') {
+      if (tool === 'loadPreTranslatedLibrary') {
+        currentProgressStep.value = 2;
+      } else if (tool === 'createContract' || tool === 'createInterface') {
         currentProgressStep.value = 3;
       } else if (tool === 'translateFunctions') {
         currentProgressStep.value = 4;
@@ -922,6 +924,7 @@ const upgradeTranslatedCode = async () => {
   loading.value = true;
   progressMode.value = "fix"; // Set fix mode
   loadingStatus.value = "🔍 Analysing the error...";
+  currentProgressStep.value = 1; // Reset progress step for fix mode
   compiled.value = false;
   successMessage.value = null;
 
@@ -933,6 +936,19 @@ const upgradeTranslatedCode = async () => {
       runtimeConfig,
       onStageUpdate: (stage, message) => {
         loadingStatus.value = message;
+        
+        // Update progress step based on fix stage
+        if (stage === "analysing") {
+          currentProgressStep.value = 1;
+        } else if (message.toLowerCase().includes("iteration 1")) {
+          currentProgressStep.value = 2;
+        } else if (message.toLowerCase().includes("iteration 2")) {
+          currentProgressStep.value = 3;
+        } else if (message.toLowerCase().includes("iteration 3")) {
+          currentProgressStep.value = 4;
+        } else if (stage === "done") {
+          currentProgressStep.value = 5;
+        }
       },
     });
 

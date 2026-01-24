@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field as PydanticField, field_validator
 from api_types import TranslateRequest, TranslationOptions
 from translation_context import RALPH_DETAILS
 from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT, perform_fim_translation
+from translate_oz import PRETRANSLATED_LIBS
 
 # Type for translation chunk callback
 TranslationChunkCallback = Callable[[str], None]
@@ -146,6 +147,7 @@ class Struct(BaseModel):
     fields: List[Field]
 
 class RalphSource(BaseModel):
+    preTranslated: str = ""
     global_structs: List[Struct] = []
     global_enums: List[RalphEnum] = []
     global_consts: List[Constant] = []
@@ -156,6 +158,11 @@ class RalphSource(BaseModel):
         """Renders the entire Ralph source code from the AST. Tag body allows tagging body of a specific contract or interface to assist in translation efforts with <|fim_start|> <|fim_end|>."""
         lines = []
         TWO_EMPTY_LINES = ["", ""]
+
+        # 0. Pre-translated libraries
+        if self.preTranslated:
+            lines.append(self.preTranslated)
+            lines.extend(TWO_EMPTY_LINES)
 
         # 1. Global constants
         if self.global_consts:
@@ -654,14 +661,23 @@ def addEnumsToContract(contractName: str, enums: List[RalphEnum]) -> str:
     return f"Added {len(enums)} enums to {contractName}"
 
 @tool
-def lookupTranslation(solidityClassNameOrInterface: str) -> str:
-    """Looks up a translation for a known Solidity class or interface (like IERC20)."""
-    # Simple dictionary lookup for now.
-    predefined = {
-        "IERC20": "Interface IERC20 { ... }", # Placeholder
-        "ERC20": "Contract ERC20(...) { ... }", # Placeholder
-    }
-    return predefined.get(solidityClassNameOrInterface, "Translation not found.")
+def loadPreTranslatedLibrary(libraryName: str) -> str:
+    """
+    Loads a pre-translated library (like OpenZeppelin contracts) into the Ralph source.
+    Use this when you encounter an import that matches one of the available pre-translated libraries.
+    Args:
+        libraryName: just the name of the contract or interface to import ex. "IERC20", "ERC20".
+    """
+    source = get_session_source()
+    
+    # Try direct match
+    content = PRETRANSLATED_LIBS.get(libraryName.lower())
+
+    if content:
+        source.preTranslated += "\n" + content
+        return f"Loaded library {libraryName} and added to source scope. Content:\n{content}"
+    
+    return f"Library {libraryName} not found."
 
 @tool
 def finalizeAndRenderTranslation() -> str:
@@ -717,7 +733,7 @@ class ChatAgent:
             translateFunctions, addMutableFieldsToContract, addImmutableFieldsToContract,
             removeImmutableFieldFromContract, removeMutableFieldFromContract,
             addMapsToContract, addEventsToContract, addConstantsToContract, addEnumsToContract,
-            lookupTranslation, finalizeAndRenderTranslation
+            finalizeAndRenderTranslation, loadPreTranslatedLibrary
         ]
 
         # LLM
@@ -735,6 +751,10 @@ class ChatAgent:
             base_url=API_URL,
         )
 
+        # Pre-process available libraries for the prompt
+        available_libs = list(PRETRANSLATED_LIBS.keys())
+        formatted_libs = "\n".join([f"- {lib}" for lib in available_libs])
+
         # Prompt
         system_prompt = (
             "You are HenryBot, an expert AI assistant for Alephium blockchain development and Ralph smart contract programming.\n\n"
@@ -743,12 +763,15 @@ class ChatAgent:
             "You are now acting as a State-Action Agent using a set of granular tools to build a Ralph contract structure from scratch.\n"
             "Instead of outputting code directly, you MUST use the provided tools to build the 'RalphSource' AST.\n"
             "1. Analyze the input Solidity code.\n"
-            "2. Identify all Contracts, Interfaces, Structs, Enums, and Constants.\n"
-            "3. Use `createContract`, `createInterface`, etc. to assert their existence.\n"
-            "4. Use `addMutableFieldsToContract`, `addImmutableFieldsToContract`, `addMapsToContract`, etc. to populate them.\n"
-            "5. Translate logic and methods by calling `translateFunctions` for each contract/interface. This uses FIM to intelligently implement the body.\n"
-            "6. FINALLY, call `finalizeAndRenderTranslation` to get the result string and return it to the user.\n"
+            "2. CHECK imports against the Available Pre-Translated Libraries list below. If found, use `loadPreTranslatedLibrary` immediately.\n"
+            "3. Identify all Contracts, Interfaces, Structs, Enums, and Constants.\n"
+            "4. Use `createContract`, `createInterface`, etc. to assert their existence, unless they are already loaded from a pre-translated library.\n"
+            "5. Use `addMutableFieldsToContract`, `addImmutableFieldsToContract`, `addMapsToContract`, etc. to populate them.\n"
+            "6. Translate logic and methods by calling `translateFunctions` for each contract/interface. This uses FIM to intelligently implement the body.\n"
+            "7. FINALLY, call `finalizeAndRenderTranslation` to get the result string and return it to the user.\n"
             "\n"
+            "Available Pre-Translated Libraries (Use `loadPreTranslatedLibrary` for these instead of translating manually):\n"
+            f"{formatted_libs}\n\n"
             "You must orchestrate this process step-by-step. Do not hallucinate tools."
         )
 
@@ -799,7 +822,7 @@ class ChatAgent:
         set_translation_queue(translation_chunk_queue)
 
         try:
-            yield StreamEvent.stage("thinking", "Analyzing...")
+            yield StreamEvent.stage("thinking", "Working...")
 
             if session_id not in self.sessions:
                 self.sessions[session_id] = []

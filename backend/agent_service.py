@@ -7,21 +7,18 @@ import aiohttp
 import asyncio
 import logging
 import os
-import queue
 import re
-from typing import Any, AsyncGenerator, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, AsyncGenerator, Callable, Dict, List, Literal, Optional
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from pydantic import BaseModel, Field as PydanticField, field_validator
+from pydantic import BaseModel, Field as PydanticField
 
-from api_types import TranslateRequest, TranslationOptions
 from translation_context import RALPH_DETAILS
 from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT, perform_fim_translation
-from translate_oz import PRETRANSLATED_LIBS
+from translate_oz import PRETRANSLATED_LIBS, get_pretranslated_code
 
 # Type for translation chunk callback
 TranslationChunkCallback = Callable[[str], None]
@@ -380,6 +377,12 @@ def createContract(name: str, abstract: bool, parentInterfaces: List[str], paren
     Naming convention:
         - Contract name MUST start with an uppercase letter.
         - Field names MUST start with a lowercase letter.
+    
+    IMPORTANT: When extending a parent contract, you MUST define all fields required by the parent contracts.
+    You MUST ensure the mutability (immutable vs mutable) of the field matches the parent contract's definition exactly.
+    If a parent has `mut fieldName: T`, the child MUST also declare `fieldName: T` in `fieldsMutable`.
+    Failure to match mutability will cause compilation errors.
+
     Args:
         name: Name of the contract.
         abstract: Whether it is abstract.
@@ -392,15 +395,34 @@ def createContract(name: str, abstract: bool, parentInterfaces: List[str], paren
     if name in source.contracts:
         return f"Error: Contract {name} already exists."
     
+    errors = []
     if not name[0].isupper():
-        return f"Error: Contract name '{name}' must start with an uppercase letter."
+        errors.append(f"Contract name '{name}' must start with an uppercase letter.")
     
     for f in fieldsImmutable:
         if not f.name[0].islower():
-            return f"Error: Immutable field '{f.name}' must start with a lowercase letter."
+            errors.append(f"Immutable field '{f.name}' must start with a lowercase letter.")
     for f in fieldsMutable:
         if not f.name[0].islower():
-            return f"Error: Mutable field '{f.name}' must start with a lowercase letter."
+            errors.append(f"Mutable field '{f.name}' must start with a lowercase letter.")
+    
+    # Validate field types and mutability with reference to parent contracts
+    for parent in parentContracts:
+        if parent in source.contracts:
+            p_contract = source.contracts[parent]
+            # Check immutable fields
+            for p_field in p_contract.fields_immutable:
+                if p_field.name not in [f.name for f in fieldsImmutable]:
+                    errors.append(f"Missing immutable field '{p_field.name}' required by parent contract '{parent}'.")
+            # Check mutable fields
+            for p_field in p_contract.fields_mutable:
+                if p_field.name not in [f.name for f in fieldsMutable]:
+                    errors.append(f"Missing mutable field '{p_field.name}' required by parent contract '{parent}'.")
+
+    if errors:
+        if len(errors) == 1:
+            return f"Error when creating contract {name}: {errors[0]}"
+        return "Multiple validation errors when creating contract " + name + ":\n- " + "\n- ".join(errors)
 
     contract = Contract(
         name=name,
@@ -720,10 +742,37 @@ def loadPreTranslatedLibrary(libraryName: str) -> str:
     source = get_session_source()
     
     # Try direct match
-    content = PRETRANSLATED_LIBS.get(libraryName.lower())
+    result = get_pretranslated_code(libraryName)
 
-    if content:
+    if result:
+        content, specs = result
         source.preTranslated += "\n\n" + content
+        
+        if specs:
+            for spec in specs:
+                name = spec.get("name")
+                type_ = spec.get("type")
+                
+                if type_ == "interface":
+                    # For interfaces, combine parents
+                    parents = spec.get("parent_contracts", []) + spec.get("parent_interfaces", [])
+                    source.interfaces[name] = Interface(
+                        name=name,
+                        hidden=True,
+                        parents=parents
+                    )
+                else:
+                    # For contracts
+                    source.contracts[name] = Contract(
+                        name=name,
+                        abstract=spec.get("abstract", False),
+                        hidden=True,
+                        fields_immutable=[Field(**f) for f in spec.get("fields_immutable", [])],
+                        fields_mutable=[Field(**f) for f in spec.get("fields_mutable", [])],
+                        parent_contracts=spec.get("parent_contracts", []),
+                        parent_interfaces=spec.get("parent_interfaces", [])
+                    )
+
         return f"Loaded library {libraryName} and added to source scope. Content:\n{content}"
     
     return f"Library {libraryName} not found."
@@ -806,7 +855,7 @@ class ChatAgent:
 
         # Prompt
         system_prompt = (
-            "You are HenryBot, an expert AI assistant for Alephium blockchain development and Ralph smart contract programming.\n\n"
+            "You are HenryCoder, an expert AI assistant for Alephium blockchain development and Ralph smart contract programming.\n\n"
             f"{TRANSLATION_SYSTEM_PROMPT}\n\n"
             "AGENCY INSTRUCTIONS:\n"
             "You are now acting as a State-Action Agent using a set of granular tools to build a Ralph contract structure from scratch.\n"
@@ -814,7 +863,7 @@ class ChatAgent:
             "1. Analyze the input Solidity code.\n"
             "2. CHECK imports against the Available Pre-Translated Libraries list below. If found, use `loadPreTranslatedLibrary` immediately.\n"
             "3. Identify all Contracts, Interfaces, Structs, Enums, and Constants.\n"
-            "4. Use `createContract`, `createInterface`, etc. to assert their existence, unless they are already loaded from a pre-translated library.\n"
+            "4. Use `createContract`, `createInterface`, etc. to assert their existence, unless they are already loaded from a pre-translated library. Make sure to include parent contracts and interfaces.\n"
             "5. Use `addMutableFieldsToContract`, `addImmutableFieldsToContract`, `addMapsToContract`, etc. to populate them.\n"
             "6. Translate logic and methods by calling `translateFunctions` for each contract/interface. This uses FIM to intelligently implement the body.\n"
             "7. FINALLY, call `finalizeAndRenderTranslation` to get the result string and return it to the user.\n"

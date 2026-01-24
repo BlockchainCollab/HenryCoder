@@ -1,0 +1,11 @@
+[
+  {
+    "type": "contract",
+    "name": "NFTCollectionBurnable",
+    "abstract": true,
+    "fields_immutable": [],
+    "fields_mutable": [],
+    "parent_contracts": [],
+    "parent_interfaces": []
+  }
+]

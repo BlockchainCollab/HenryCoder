@@ -157,14 +157,15 @@ def load_replacement_jsons() -> dict[str, list]:
     return replacement_jsons
 
 
-PRELOADED_JSONS = load_replacement_jsons()
+# keys are class names/interfaces in lowercase
+PRETRANSLATED_LIBS_JSONS = load_replacement_jsons()
 
 
 def get_pretranslated_code(class_name: str) -> None | tuple[str, list]:
     """Given a class or interface name, return its pretranslated code and json schema if available."""
     key = class_name.lower()
     code = PRETRANSLATED_LIBS.get(key)
-    specs = PRELOADED_JSONS.get(key, [])
+    specs = PRETRANSLATED_LIBS_JSONS.get(key, [])
     
     if code:
         if not specs:

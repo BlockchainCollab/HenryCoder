@@ -1,0 +1,20 @@
+[
+  {
+    "type": "contract",
+    "name": "NFTCollectionRoyalty",
+    "abstract": true,
+    "fields_immutable": [],
+    "fields_mutable": [
+      {
+        "name": "defaultRoyaltyRecipient",
+        "type": "Address"
+      },
+      {
+        "name": "defaultRoyaltyBps",
+        "type": "U256"
+      }
+    ],
+    "parent_contracts": [],
+    "parent_interfaces": []
+  }
+]

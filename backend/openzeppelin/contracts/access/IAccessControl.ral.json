@@ -1,0 +1,11 @@
+[
+  {
+    "type": "interface",
+    "name": "IAccessControl",
+    "abstract": false,
+    "fields_immutable": [],
+    "fields_mutable": [],
+    "parent_contracts": [],
+    "parent_interfaces": []
+  }
+]

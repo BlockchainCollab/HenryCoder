@@ -303,15 +303,9 @@ class RalphSource(BaseModel):
             if contr.methods or tag_body == cname:
                 if tag_body == cname:
                     lines.append("<|fim_start|>")
-                
-                # if contr.methods:
-                #     # Indent methods
-                #     method_lines = contr.methods.strip().split('\n')
-                #     for ml in method_lines:
-                #         lines.append(f"  {ml}")
-                # it's multiline content, but maybe it will work
+
+                # It's multiline content, but appending it directly may still work as expected.
                 lines.append("  " + contr.methods)
-                
                 if tag_body == cname:
                     lines.append("<|fim_end|>")
 
@@ -999,7 +993,7 @@ class ChatAgent:
         
         solidity_context = ""
         if solidity_code:
-            solidity_context = f"## Original Solidity Code\\n```solidity\\n{solidity_code}\\n```\\n"
+            solidity_context = f"## Original Solidity Code\n```solidity\n{solidity_code}\n```\n"
         
         fix_system_prompt = f"""You are an expert Ralph smart contract developer.
 Your task is to fix Ralph code that has compilation errors.

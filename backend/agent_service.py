@@ -126,6 +126,7 @@ class EventDef(BaseModel):
 class Contract(BaseModel):
     name: str
     abstract: bool
+    hidden: bool = False  # Used to skip rendering builtin/pretranslated code in the final output
     fields_immutable: List[Field] = []
     fields_mutable: List[Field] = []
     parent_contracts: List[str] = []
@@ -138,6 +139,7 @@ class Contract(BaseModel):
 
 class Interface(BaseModel):
     name: str
+    hidden: bool = False  # Used to skip rendering builtin/pretranslated code in the final output
     parents: List[str] = []
     events: List[RalphEvent] = []
     public_methods: str = "" # Definitions of public methods
@@ -188,6 +190,9 @@ class RalphSource(BaseModel):
 
         # 4. Interfaces
         for iname, iface in self.interfaces.items():
+            if iface.hidden:
+                continue
+
             parents = ""
             if iface.parents:
                 parents = f" extends {', '.join(iface.parents)}"
@@ -212,6 +217,9 @@ class RalphSource(BaseModel):
 
         # 5. Contracts
         for cname, contr in self.contracts.items():
+            if contr.hidden:
+                continue
+
             abstract = "Abstract " if contr.abstract else ""
             
             # Inheritance Logic: Resolve parent contract arguments and infer missing fields
@@ -403,7 +411,7 @@ def createContract(name: str, abstract: bool, parentInterfaces: List[str], paren
         fields_mutable=fieldsMutable
     )
     source.contracts[name] = contract
-    return f"Created contract {name}"
+    return f"Created contract {name} with immutable fields ({', '.join(f.name for f in fieldsImmutable)}) and mutable fields ({', '.join(f.name for f in fieldsMutable)})"
 
 @tool
 def createInterface(name: str, parents: List[str]) -> str:
@@ -412,7 +420,7 @@ def createInterface(name: str, parents: List[str]) -> str:
     if name in source.interfaces:
         return f"Error: Interface {name} already exists."
     source.interfaces[name] = Interface(name=name, parents=parents)
-    return f"Created interface {name}"
+    return f"Created interface {name} with parents {', '.join(parents)}"
 
 @tool
 def createGlobalStruct(struct: Struct) -> str:
@@ -537,17 +545,50 @@ async def translateFunctions(interfaceOrContractName: str) -> str:
         
         return f"Successfully translated and updated functions for {interfaceOrContractName}."
 
+def fields_validator(contract: Contract, new_fields: List[Field]) -> tuple[Optional[str], List[Field], List[str]]:
+    """
+    Validates fields to be added to a contract.
+    Returns: (error_message, fields_to_add, ignored_field_names)
+    Checks uniqueness across BOTH mutable and immutable fields.
+    """
+    # Check for uniqueness across ALL existing fields
+    all_existing_names = {f.name for f in contract.fields_immutable + contract.fields_mutable}
+    
+    to_add = []
+    ignored = []
+    batch_names = set()
+
+    for f in new_fields:
+        if not f.name[0].islower():
+            return f"Error: Field '{f.name}' must start with a lowercase letter.", [], []
+        
+        if f.name in all_existing_names or f.name in batch_names:
+            ignored.append(f.name)
+        else:
+            to_add.append(f)
+            batch_names.add(f.name)
+            
+    return None, to_add, ignored
+
 @tool
 def addMutableFieldsToContract(contractName: str, fields: List[Field]) -> str:
     """Adds mutable fields to a contract. Field names must start with a lowercase letter."""
     source = get_session_source()
     if contractName not in source.contracts:
         return f"Error: Contract {contractName} not found."
-    for f in fields:
-        if not f.name[0].islower():
-            return f"Error: Mutable field '{f.name}' must start with a lowercase letter."
-    source.contracts[contractName].fields_mutable.extend(fields)
-    return f"Added {len(fields)} mutable fields to {contractName}"
+    
+    contract = source.contracts[contractName]
+    error, added, ignored = fields_validator(contract, fields)
+    
+    if error:
+        return error
+        
+    contract.fields_mutable.extend(added)
+    
+    msg = f"Added mutable ({', '.join(f.name for f in added)}) to contract {contractName}"
+    if ignored:
+        msg += f", ignored ({', '.join(ignored)}) because they already exist"
+    return msg
 
 @tool
 def addImmutableFieldsToContract(contractName: str, fields: List[Field]) -> str:
@@ -555,11 +596,19 @@ def addImmutableFieldsToContract(contractName: str, fields: List[Field]) -> str:
     source = get_session_source()
     if contractName not in source.contracts:
         return f"Error: Contract {contractName} not found."
-    for f in fields:
-        if not f.name[0].islower():
-            return f"Error: Immutable field '{f.name}' must start with a lowercase letter."
-    source.contracts[contractName].fields_immutable.extend(fields)
-    return f"Added {len(fields)} immutable fields to {contractName}"
+    
+    contract = source.contracts[contractName]
+    error, added, ignored = fields_validator(contract, fields)
+    
+    if error:
+        return error
+    
+    contract.fields_immutable.extend(added)
+    
+    msg = f"Added immutable ({', '.join(f.name for f in added)}) to contract {contractName}"
+    if ignored:
+        msg += f", ignored ({', '.join(ignored)}) because they already exist"
+    return msg
 
 @tool
 def removeImmutableFieldFromContract(contractName: str, fieldName: str) -> str:
@@ -674,7 +723,7 @@ def loadPreTranslatedLibrary(libraryName: str) -> str:
     content = PRETRANSLATED_LIBS.get(libraryName.lower())
 
     if content:
-        source.preTranslated += "\n" + content
+        source.preTranslated += "\n\n" + content
         return f"Loaded library {libraryName} and added to source scope. Content:\n{content}"
     
     return f"Library {libraryName} not found."

@@ -1,3 +1,4 @@
+// Ralph translation of Ownable
 Abstract Contract Ownable(mut owner: Address) {
   event OwnershipTransferred(previousOwner: Address, newOwner: Address)
 

@@ -354,6 +354,23 @@ def _safe_parse_fields(fields: Any) -> List[Field]:
     return parsed
 
 
+def _extract_ralph_code(text: str) -> str:
+    """
+    Extract Ralph code or generic code block from text containing markdown code fences.
+    Ensures that trailing/leading whitespace and markdown fences are removed.
+    """
+    cleaned_content = text.strip()
+    if "```" in cleaned_content:
+        match = re.search(r"```(?:ralph)?\s*(.*?)\s*```", cleaned_content, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        else:
+            return "\n".join(
+                [l for l in cleaned_content.split("\n") if not l.strip().startswith("```")]
+            ).strip()
+    return cleaned_content
+
+
 # --- Helper for human readable logs ---
 
 # We can rely on StreamEvent.tool_start to show the action, 
@@ -544,15 +561,8 @@ async def translateFunctions(interfaceOrContractName: str) -> str:
             logger.error(f"FIM translation failed: {e}")
             return f"Error during translation: {e}"
 
-        # Clean content
-        cleaned_content = full_content.strip()
-        # Remove markdown code blocks if present
-        if "```" in cleaned_content:
-            match = re.search(r'```(?:ralph)?(.*?)```', cleaned_content, re.DOTALL)
-            if match:
-                cleaned_content = match.group(1).strip()
-            else:
-                cleaned_content = "\n".join([l for l in cleaned_content.split('\n') if not l.strip().startswith("```")])
+        # Clean content and remove markdown fences if present
+        cleaned_content = _extract_ralph_code(full_content)
 
         if interfaceOrContractName in source.contracts:
             source.contracts[interfaceOrContractName].methods = cleaned_content
@@ -1064,7 +1074,7 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
                 ])
                 
                 fixed_code = response.content.strip()
-                fixed_code = self._extract_ralph_code(fixed_code)
+                fixed_code = _extract_ralph_code(fixed_code)
                 
                 if not fixed_code:
                     logger.warning(f"Empty fix result on iteration {iterations}")
@@ -1105,14 +1115,6 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
             }
         }
 
-    def _extract_ralph_code(self, text: str) -> str:
-        ralph_match = re.search(r'```ralph\\s*\\n([\\s\\S]*?)```', text)
-        if ralph_match:
-            return ralph_match.group(1).strip()
-        code_match = re.search(r'```\\s*\\n?([\\s\\S]*?)```', text)
-        if code_match:
-            return code_match.group(1).strip()
-        return text.strip()
 
     async def _compile_ralph_code(self, code: str) -> Dict[str, Any]:
         node_url = os.getenv("NODE_URL", "https://node.testnet.alephium.org")

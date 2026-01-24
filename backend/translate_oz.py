@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 
 OZ_DIR = os.path.join(os.path.dirname(__file__), "openzeppelin")
 
@@ -134,3 +135,39 @@ def get_pretranslated_libs() -> dict[str, str]:
 
 # Preload the pretranslated libs for use in agent_service (keys are class/interface names in lowercase)"""
 PRETRANSLATED_LIBS = get_pretranslated_libs()
+
+
+def load_replacement_jsons() -> dict[str, list]:
+    """Load replacement JSON specs from files present under `documentation/openzeppelin`"""
+    replacement_jsons: dict[str, list] = {}
+
+    for root, _, files in os.walk(OZ_DIR):
+        for file in files:
+            if file.endswith(".ral.json"):
+                file_path = os.path.join(root, file)
+                # We use the file name stem (lowercase) as key to match PRETRANSLATED_LIBS
+                file_stem = file.replace(".ral.json", "").lower()
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        replacement_jsons[file_stem] = data
+                except Exception as e:
+                    logger.error(f"Error loading replacement json {file_path}: {e}")
+
+    return replacement_jsons
+
+
+PRELOADED_JSONS = load_replacement_jsons()
+
+
+def get_pretranslated_code(class_name: str) -> None | tuple[str, list]:
+    """Given a class or interface name, return its pretranslated code and json schema if available."""
+    key = class_name.lower()
+    code = PRETRANSLATED_LIBS.get(key)
+    specs = PRELOADED_JSONS.get(key, [])
+    
+    if code:
+        if not specs:
+            logger.warning(f"Pretranslated code found for {class_name} but no specs available.")
+        return code, specs
+    return None

@@ -923,46 +923,78 @@ class ChatAgent:
             
             final_output = ""
             
-            # We process the stream from the compiled graph
-            async for event in self.agent.astream_events(
+            # We process the stream from the compiled graph using an iterator to allow
+            # concurrent draining of the translation_chunk_queue.
+            agent_aiter = self.agent.astream_events(
                 {"messages": chat_history + [{"role": "user", "content": message}]},
                 version="v1"
-            ):
-                kind = event["event"]
-                run_id = event.get("run_id")
-                
-                if kind == "on_tool_start":
-                    name = event.get('name', 'unknown_tool')
-                    inputs = event['data'].get('input')
-                    # format input for display if it's a dict
-                    input_str = str(inputs)
-                    yield StreamEvent.tool_start(name, input_str, run_id)
-                
-                elif kind == "on_tool_end":
-                    name = event.get('name', 'unknown_tool')
-                    yield StreamEvent.tool_end(name, success=True, run_id=run_id)
-                    # Render and yield code snapshot after each tool
-                    try:
-                        source = get_session_source()
-                        code_snapshot = source.render()
-                        yield StreamEvent.code_snapshot(code_snapshot)
-                    except Exception as render_err:
-                        logger.warning(f"Failed to render code snapshot: {render_err}")
-                
-                elif kind == "on_chain_end":
-                    # In LangGraph, we look for the final message from the model
-                    # But simpler to look for "on_chat_model_stream" or "on_chat_model_end" for content
-                    pass
-                
-                elif kind == "on_chat_model_stream":
-                    # We can stream tokens if we want, but for tool usage we often want the final result
-                    # But the requirement asks for tool events mostly.
-                    # If there is content output (non-tool), we can capture it.
-                    chunk = event['data'].get('chunk')
-                    if chunk and hasattr(chunk, 'content') and chunk.content:
-                         final_output += chunk.content
-                         # If we want to stream text content to user:
-                         # yield StreamEvent.content(chunk.content))
+            ).__aiter__()
+            
+            agent_task = asyncio.create_task(agent_aiter.__anext__())
+            queue_task = asyncio.create_task(translation_chunk_queue.get())
+            
+            try:
+                while True:
+                    done, _ = await asyncio.wait(
+                        [agent_task, queue_task],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    if queue_task in done:
+                        try:
+                            item = queue_task.result()
+                            yield item
+                        except Exception as e:
+                            logger.error(f"Error reading from translation queue: {e}")
+                        queue_task = asyncio.create_task(translation_chunk_queue.get())
+                        
+                    if agent_task in done:
+                        try:
+                            event = agent_task.result()
+                            
+                            kind = event["event"]
+                            run_id = event.get("run_id")
+                            
+                            if kind == "on_tool_start":
+                                name = event.get('name', 'unknown_tool')
+                                inputs = event['data'].get('input')
+                                # format input for display if it's a dict
+                                input_str = str(inputs)
+                                yield StreamEvent.tool_start(name, input_str, run_id)
+                            
+                            elif kind == "on_tool_end":
+                                name = event.get('name', 'unknown_tool')
+                                yield StreamEvent.tool_end(name, success=True, run_id=run_id)
+                                # Render and yield code snapshot after each tool
+                                try:
+                                    source = get_session_source()
+                                    code_snapshot = source.render()
+                                    yield StreamEvent.code_snapshot(code_snapshot)
+                                except Exception as render_err:
+                                    logger.warning(f"Failed to render code snapshot: {render_err}")
+                            
+                            elif kind == "on_chat_model_stream":
+                                # We can stream tokens if we want, but for tool usage we often want the final result
+                                # But the requirement asks for tool events mostly.
+                                # If there is content output (non-tool), we can capture it.
+                                chunk = event['data'].get('chunk')
+                                if chunk and hasattr(chunk, 'content') and chunk.content:
+                                     final_output += chunk.content
+                                     # If we want to stream text content to user:
+                                     # yield StreamEvent.content(chunk.content))
+                            
+                            agent_task = asyncio.create_task(agent_aiter.__anext__())
+                        except StopAsyncIteration:
+                            # Finished agent stream. Drain remaining queue items.
+                            queue_task.cancel()
+                            while not translation_chunk_queue.empty():
+                                yield translation_chunk_queue.get_nowait()
+                            break
+            finally:
+                if not agent_task.done():
+                    agent_task.cancel()
+                if not queue_task.done():
+                    queue_task.cancel()
 
             yield StreamEvent.stage("done")
             

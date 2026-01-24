@@ -5,28 +5,24 @@ from agent_service import ChatAgent, StreamEvent
 
 @pytest.fixture
 def agent():
-    # Patch the LLM and perform_translation for all tests
-    with patch("agent_service.ChatOpenAI") as mock_llm, \
-         patch("agent_service.perform_translation") as mock_translation:
+    # Patch the LLM and base objects for all tests
+    with patch("agent_service.ChatOpenAI") as mock_llm:
         # Mock LLM agent's astream_events to yield a sequence of events
         mock_agent = MagicMock()
-        # Simulate a tool start, tool end, and chat model stream event
+        
         async def fake_astream_events(*args, **kwargs):
-            yield {"event": "on_tool_start", "name": "resolve_solidity_imports"}
-            yield {"event": "on_tool_end", "name": "resolve_solidity_imports", "data": {"output": "✓ Imports resolved"}}
-            yield {"event": "on_tool_start", "name": "translate_evm_to_ralph"}
-            yield {"event": "on_tool_end", "name": "translate_evm_to_ralph", "data": {"output": "Translated Ralph code: ..."}}
-            yield {"event": "on_chat_model_stream", "data": {"chunk": MagicMock(content="Some chat content.")}}
-            yield {"event": "on_chain_end", "data": {"output": "Final output."}}
+            yield {"event": "on_tool_start", "name": "createContract", "data": {"input": "{'name': 'MyContract'}"}, "run_id": "1"}
+            yield {"event": "on_tool_end", "name": "createContract", "success": True, "run_id": "1"}
+            yield {"event": "on_tool_start", "name": "translateFunctions", "data": {"input": "{'interfaceOrContractName': 'MyContract'}"}, "run_id": "2"}
+            yield {"event": "on_tool_end", "name": "translateFunctions", "success": True, "run_id": "2"}
+            yield {"event": "on_chat_model_stream", "data": {"chunk": MagicMock(content="Final thoughts from agent.")}}
+        
         mock_agent.astream_events = fake_astream_events
         # Patch ChatOpenAI to return a dummy llm
         mock_llm.return_value = MagicMock()
+        
         # Patch create_agent to return our mock agent
         with patch("agent_service.create_agent", return_value=mock_agent):
-            # Patch perform_translation to be an async generator
-            async def fake_perform_translation(request, stream=False):
-                yield ("translated chunk", None, None, None)
-            mock_translation.side_effect = fake_perform_translation
             yield ChatAgent()
 
 def run_async(gen):
@@ -41,49 +37,82 @@ async def _collect_async(gen):
 
 def test_chat_event_sequence(agent):
     # Test that the chat method yields the expected event sequence
-    message = "import '@openzeppelin/contracts/token/ERC20/ERC20.sol';\ncontract Foo {}"
-    events = run_async(agent.chat(message, session_id="test1", stream=True, options={"optimize": True}))
-    # Check that at least one of each event type is present
+    message = "contract MyContract {}"
+    # We need to set a session ID and source
+    events = run_async(agent.chat(message, session_id="test1", stream=True, options={"smart": True}))
+    
+    # Check for expected event types
     event_types = [e["type"] for e in events]
     assert "stage" in event_types
-    assert "content" in event_types
-    assert any(e["type"] == "tool_start" for e in events)
-    assert any(e["type"] == "tool_end" for e in events)
-    # Check that the first event is a stage event (thinking)
+    assert "tool_start" in event_types
+    assert "tool_end" in event_types
+    assert "code_snapshot" in event_types
+    
+    # Verify stages
     assert events[0]["type"] == "stage"
     assert events[0]["data"]["stage"] == "thinking"
-    # Check that the last event is a stage event (done)
-    assert events[-1]["type"] == "stage"
-    assert events[-1]["data"]["stage"] == "done"
+    
+    # Verify tool events
+    tool_starts = [e for e in events if e["type"] == "tool_start"]
+    assert any(t["data"]["tool"] == "createContract" for t in tool_starts)
+    assert any(t["data"]["tool"] == "translateFunctions" for t in tool_starts)
 
-def test_chat_error_event(agent):
-    # Patch agent.agent.astream_events to raise an exception during async iteration
+def test_chat_error_handling(agent):
+    # Patch agent.agent.astream_events to raise an exception
     async def error_gen(*args, **kwargs):
-        raise Exception("fail")
-        yield  # Makes this an async generator
+        raise Exception("Agent failed")
+        yield
     agent.agent.astream_events = error_gen
-    message = "contract Foo {}"
+    
+    message = "contract Failed {}"
     events = run_async(agent.chat(message, session_id="errtest", stream=True))
-    # Should yield an error event
+    
     assert any(e["type"] == "error" for e in events)
     error_event = next(e for e in events if e["type"] == "error")
-    assert "fail" in error_event["data"]["message"]
+    assert "Agent failed" in error_event["data"]["message"]
 
-def test_session_options_storage(agent):
-    # Test that session options are stored and retrieved correctly
-    opts = {"optimize": True, "include_comments": False}
-    agent.set_session_options("abc", opts)
-    retrieved = agent.get_session_options("abc")
-    assert retrieved["optimize"] is True
-    assert retrieved["include_comments"] is False
-    # Default fallback
-    default = agent.get_session_options("notset")
-    assert default["optimize"] is False
-    assert default["include_comments"] is True
+def test_session_management(agent):
+    opts = {"smart": True, "optimize": True}
+    agent.set_session_options("sess1", opts)
+    assert agent.get_session_options("sess1") == opts
+    
+    # Test clear_session
+    agent.clear_session("sess1")
+    assert agent.get_session_options("sess1") != opts # Should return defaults
 
-def test_clear_session(agent):
-    agent.sessions["foo"] = [1, 2]
-    agent.session_options["foo"] = {"optimize": True}
-    agent.clear_session("foo")
-    assert "foo" not in agent.sessions
-    assert "foo" not in agent.session_options
+@pytest.mark.asyncio
+async def test_fix_code_success(agent):
+    # Mock the fix_llm response
+    mock_response = MagicMock()
+    mock_response.content = "fixed Ralph code"
+    agent.fix_llm.ainvoke = AsyncMock(return_value=mock_response)
+    
+    # Mock the compilation check
+    with patch.object(agent, "_compile_ralph_code", return_value={"success": True}) as mock_compile:
+        gen = agent.fix_code("broken code", "error message")
+        events = []
+        async for e in gen:
+            events.append(e)
+            
+        assert any(e["type"] == "stage" and e["data"]["stage"] == "fixing" for e in events)
+        assert any(e["type"] == "result" and e["data"]["success"] is True for e in events)
+        result_event = next(e for e in events if e["type"] == "result")
+        assert result_event["data"]["fixed_code"] == "fixed Ralph code"
+
+@pytest.mark.asyncio
+async def test_fix_code_failure(agent):
+    # Mock the fix_llm response
+    mock_response = MagicMock()
+    mock_response.content = "still broken code"
+    agent.fix_llm.ainvoke = AsyncMock(return_value=mock_response)
+    
+    # Mock the compilation check to always fail
+    with patch.object(agent, "_compile_ralph_code", return_value={"success": False, "error": "still bad"}) as mock_compile:
+        gen = agent.fix_code("broken code", "error message", max_iterations=2)
+        events = []
+        async for e in gen:
+            events.append(e)
+            
+        assert any(e["type"] == "result" and e["data"]["success"] is False for e in events)
+        result_event = next(e for e in events if e["type"] == "result")
+        assert result_event["data"]["iterations"] == 2

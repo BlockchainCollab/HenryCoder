@@ -168,5 +168,35 @@ class TestReplaceImportsIntegration:
         assert "\n\n" in result  # Should be separated
 
 
+class TestAgenticImports:
+    """Tests for the new agentic system overhauled imports."""
+
+    def test_pretranslated_libs_format(self):
+        """Test that PRETRANSLATED_LIBS has lowercase keys."""
+        from translate_oz import PRETRANSLATED_LIBS
+        for key in PRETRANSLATED_LIBS.keys():
+            assert key == key.lower()
+            assert isinstance(PRETRANSLATED_LIBS[key], str)
+
+    def test_get_pretranslated_code_known(self):
+        """Test get_pretranslated_code with a known class."""
+        from translate_oz import get_pretranslated_code
+        # 'ownable' or 'accesscontrol' are likely candidates if loaded
+        # Let's try to find one that is actually there
+        from translate_oz import PRETRANSLATED_LIBS
+        if PRETRANSLATED_LIBS:
+            sample_key = list(PRETRANSLATED_LIBS.keys())[0]
+            result = get_pretranslated_code(sample_key)
+            assert result is not None
+            code, specs = result
+            assert isinstance(code, str)
+            assert isinstance(specs, list)
+
+    def test_get_pretranslated_code_unknown(self):
+        """Test get_pretranslated_code with an unknown class."""
+        from translate_oz import get_pretranslated_code
+        assert get_pretranslated_code("NonExistentContractXYZ") is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

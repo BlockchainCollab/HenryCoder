@@ -150,7 +150,7 @@ fn transferTokenToSelf!(fromAddress: Address, tokenId: ByteVec, amount: U256) ->
 
 **REQUIRED ANNOTATION**
 preapprovedAssets = true
-payTocontractOnly = true XOR assetsInContract = true
+payToContractOnly = true XOR assetsInContract = true
 
 Transfers token to the contract from the input assets of the function. The fromAddress must not be the same as the contract address.
 

@@ -1,0 +1,13 @@
+[
+  {
+    "type": "contract",
+    "name": "AccessControl",
+    "abstract": true,
+    "fields_immutable": [],
+    "fields_mutable": [],
+    "parent_contracts": [],
+    "parent_interfaces": [
+      "IAccessControl"
+    ]
+  }
+]

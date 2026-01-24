@@ -1,0 +1,16 @@
+[
+  {
+    "type": "contract",
+    "name": "Ownable",
+    "abstract": true,
+    "fields_immutable": [],
+    "fields_mutable": [
+      {
+        "name": "owner",
+        "type": "Address"
+      }
+    ],
+    "parent_contracts": [],
+    "parent_interfaces": []
+  }
+]

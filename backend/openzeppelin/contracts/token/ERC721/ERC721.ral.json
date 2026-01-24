@@ -1,0 +1,39 @@
+[
+  {
+    "type": "contract",
+    "name": "NFT",
+    "abstract": false,
+    "fields_immutable": [],
+    "fields_mutable": [
+      {
+        "name": "nftMetadata",
+        "type": "NFTMetadata"
+      }
+    ],
+    "parent_contracts": [],
+    "parent_interfaces": [
+      "INFT"
+    ]
+  },
+  {
+    "type": "contract",
+    "name": "NFTCollectionBase",
+    "abstract": true,
+    "fields_immutable": [
+      {
+        "name": "nftTemplateId",
+        "type": "ByteVec"
+      }
+    ],
+    "fields_mutable": [
+      {
+        "name": "nftcollectionMetadata",
+        "type": "NFTCollectionMetadata"
+      }
+    ],
+    "parent_contracts": [],
+    "parent_interfaces": [
+      "INFTCollection"
+    ]
+  }
+]

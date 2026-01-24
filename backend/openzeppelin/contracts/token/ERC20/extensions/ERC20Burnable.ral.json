@@ -1,0 +1,16 @@
+[
+  {
+    "type": "contract",
+    "name": "FungibleTokenBurnable",
+    "abstract": true,
+    "fields_immutable": [],
+    "fields_mutable": [
+      {
+        "name": "tokenMetadata",
+        "type": "FungibleTokenMetadata"
+      }
+    ],
+    "parent_contracts": [],
+    "parent_interfaces": []
+  }
+]

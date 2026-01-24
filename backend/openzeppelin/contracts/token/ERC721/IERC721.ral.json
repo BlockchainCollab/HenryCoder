@@ -1,0 +1,20 @@
+[
+  {
+    "type": "interface",
+    "name": "INFT",
+    "abstract": false,
+    "fields_immutable": [],
+    "fields_mutable": [],
+    "parent_contracts": [],
+    "parent_interfaces": []
+  },
+  {
+    "type": "interface",
+    "name": "INFTCollection",
+    "abstract": false,
+    "fields_immutable": [],
+    "fields_mutable": [],
+    "parent_contracts": [],
+    "parent_interfaces": []
+  }
+]

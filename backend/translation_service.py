@@ -48,10 +48,9 @@ def build_translation_system_prompt() -> str:
         "4. Include only business logic comments, NOT syntax explanation comments\n"
         "5. Use proper Ralph annotations (@using) where needed\n"
         "6. Handle errors with assert! and integer error codes\n"
-        "7. Do not include code from PRE-TRANSLATED LIBRARIES in your output. Code is available to use.\n"
-        "8. Every translated function can include an additional comment explaining the differences in behavior between Solidity and Ralph, if present. These comments must be one line long and start with '// @@@'.\n"
+        "7. Every translated function can include an additional comment explaining the differences in behavior between Solidity and Ralph, if present. These comments must be one line long and start with '// @@@'.\n"
         "   Example: // @@@ Solidity allows dynamic array parameters, but Ralph only supports fixed-size arrays.\n\n"
-        "9. Annotate every translated feature that is redundant in Ralph with @@@ comment, ex. ReentrancyGuard\n\n"
+        "8. Annotate every translated feature that is redundant in Ralph with @@@ comment, ex. ReentrancyGuard\n"
         "AVOID:\n"
         # "- Comments like 'Ralph doesn't have X, so we use Y'\n"
         # "- Explaining basic syntax differences in comments\n"
@@ -91,6 +90,7 @@ def build_fim_system_prompt() -> str:
         "8. Do NOT duplicate methods found in parent contracts.\n"
         "9. Every translated function can include an additional comment explaining the differences in behavior between Solidity and Ralph, if present. These comments must be one line long and start with '@@@'.\n"
         "   Example: @@@ Solidity allows dynamic array parameters, but Ralph only supports fixed-size arrays.\n\n"
+        "10. Use curly braces syntax when calling functions (even when calling own functions) that have preapprovedAssets annotation\n\n"
         f"Ralph Language Details:\n\n{RALPH_DETAILS}"
     )
 
@@ -153,7 +153,7 @@ async def perform_fim_translation(
             api_key=API_KEY, 
             base_url=API_URL.replace("/chat/completions", "")
         ) as client:
-            temp = 0.2
+            temp = 1.0 if "gemini" in model else 0.2
             
             response = await client.responses.create(
                 model=model,

@@ -4,10 +4,22 @@ export type PreviousTranslation = {
   errors: string[];
 };
 
+type ToolStartData = {
+  tool: string;
+  input: string;
+  run_id?: string;
+};
+
+type ToolEndData = {
+  tool: string;
+  success: boolean;
+  run_id?: string;
+};
+
 type AgentChunk =
   | { type: "stage"; data: { stage: string; message: string } }
-  | { type: "tool_start"; data: { tool: string; input: string } }
-  | { type: "tool_end"; data: { tool: string; success: boolean } }
+  | { type: "tool_start"; data: ToolStartData }
+  | { type: "tool_end"; data: ToolEndData }
   | { type: "content"; data: string }
   | { type: "translation_chunk"; data: string }
   | { type: "code_snapshot"; data: string }
@@ -48,8 +60,8 @@ export async function translateCode({
   setOutputCode: (val: string) => void;
   setLoadingStatus: (val: string) => void;
   setErrors: (val: string[]) => void;
-  onToolStart?: (tool: string, input: string) => void;
-  onToolEnd?: (tool: string, success: boolean) => void;
+  onToolStart?: (tool: string, input: string, run_id?: string) => void;
+  onToolEnd?: (tool: string, success: boolean, run_id?: string) => void;
 }) {
   const sessionId = ref<string>(crypto.randomUUID());
   setOutputCode(initialOutputCode);
@@ -135,12 +147,12 @@ export async function translateCode({
 
             // Handle tool execution (for future agentic view)
             if (chunk.type === "tool_start") {
-              console.log(`[Agent Tool Start] ${chunk.data.tool}:`, chunk.data.input);
-              setLoadingStatus(`🔧 Using tool: ${chunk.data.tool}`);
-              onToolStart?.(chunk.data.tool, chunk.data.input);
+              console.log(`[Agent Tool Start] ${chunk.data.tool} ${chunk.data.run_id}:`, chunk.data.input);
+              onToolStart?.(chunk.data.tool, chunk.data.input, chunk.data.run_id);
             }
             if (chunk.type === "tool_end") {
-              onToolEnd?.(chunk.data.tool, chunk.data.success);
+              console.log(`[Agent Tool End] ${chunk.data.tool} ${chunk.data.run_id}`);
+              onToolEnd?.(chunk.data.tool, chunk.data.success, chunk.data.run_id);
             }
 
             // Handle errors from backend

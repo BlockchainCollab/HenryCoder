@@ -399,27 +399,31 @@
           class="flex-1 flex flex-col rounded-[12px] p-5 border border-[#6D5D5D] bg-[#242322] overflow-hidden"
         >
           <div class="relative flex-1 flex flex-col overflow-hidden">
-            <!-- Agent Tool Status Overlay -->
-            <div
-              v-if="loading && currentTool"
-              class="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#191817] border border-[#FBA444] text-[#FBA444] px-4 py-2 rounded-lg shadow-lg animate-pulse"
+             <!-- Progress Overlay -->
+            <div 
+              v-if="loading && !progressMinimized"
+              class="absolute inset-0 z-30 p-0"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span class="font-mono text-sm font-bold">{{ currentTool }}</span>
-               <span class="text-xs text-gray-400 border-l border-gray-600 pl-2 ml-2">{{ loadingStatus }}</span>
+              <TranslationProgress
+                :status-message="currentActivity"
+                :minimized="progressMinimized"
+                :mode="progressMode"
+                :stage="currentProgressStep"
+                @toggle-minimize="progressMinimized = !progressMinimized"
+              />
             </div>
-            
-            <!-- Simple loading spinner if no tool is active yet but loading -->
-             <div
-              v-if="loading && !currentTool"
-              class="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#191817] border border-gray-600 text-gray-300 px-3 py-1.5 rounded-lg shadow-lg"
-            >
-              <div class="animate-spin h-4 w-4 border-2 border-gray-500 rounded-full border-t-transparent"></div>
-              <span class="text-xs">{{ loadingStatus || 'Starting agent...' }}</span>
-            </div>
+            <!-- Minimized Progress Indicator -->
+            <TranslationProgress
+              v-if="loading && progressMinimized"
+              :status-message="currentActivity"
+              :minimized="true"
+              :mode="progressMode"
+              :stage="currentProgressStep"
+              @toggle-minimize="progressMinimized = !progressMinimized"
+            />
+
+            <!-- Agent Tool Status Overlay (Removed as per user request) -->
+            <!-- Simple loading spinner REMOVED -->
             <div
               ref="outputContainer"
               class="flex-1 overflow-auto custom-scrollbar"
@@ -653,11 +657,13 @@ const outputCode = ref(``);
 const highlightedOutput = ref("");
 const loading = ref(false);
 const loadingStatus = ref("");
-const currentTool = ref<string | null>(null);
+type ActiveTool = { id: string; name: string; input: string; };
+const activeTools = ref<ActiveTool[]>([]);
 const compiled = ref(false);
 const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
 const successMessage = ref<string | null>(null);
+const currentProgressStep = ref(1);
 const options = ref({
   // translation options
   optimize: false,
@@ -677,6 +683,16 @@ const progressMinimized = ref(false);
 const progressMode = ref<"translate" | "fix">("translate");
 const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 const outputContainer = ref<HTMLElement | null>(null);
+
+const currentActivity = computed(() => {
+  if (activeTools.value.length > 0) {
+    const tool = activeTools.value[activeTools.value.length - 1];
+    // Shorten input if too long
+    const input = tool.input.length > 40 ? tool.input.substring(0, 40) + '...' : tool.input;
+    return `${tool.name} (${input})`;
+  }
+  return loadingStatus.value;
+});
 
 const runtimeConfig = useRuntimeConfig();
 
@@ -800,6 +816,7 @@ const translateCodeInner = async (
   errorsOpen.value = true;
   successMessage.value = null;
   progressMinimized.value = false;
+  currentProgressStep.value = 1;
   await apiTranslateCode({
     sourceCode: sourceCode.value,
     options: options.value,
@@ -809,16 +826,30 @@ const translateCodeInner = async (
     setOutputCode: (val: string) => (outputCode.value = val),
     setLoadingStatus: (val: string) => (loadingStatus.value = val),
     setErrors: (val: string[]) => (errors.value = val),
-    onToolStart: (tool: string, input: string) => {
-      currentTool.value = tool;
-      loadingStatus.value = `Using ${tool}...`;
+    onToolStart: (tool: string, input: string, run_id?: string) => {
+      const id = run_id || `${tool}-${Date.now()}-${Math.random()}`;
+      activeTools.value.push({ id, name: tool, input });
+
+      // Update progress step based on tool being started
+      if (tool === 'createContract' || tool === 'createInterface') {
+        currentProgressStep.value = 3;
+      } else if (tool === 'translateFunctions') {
+        currentProgressStep.value = 4;
+      }
     },
-    onToolEnd: (tool: string, success: boolean) => {
-      // currentTool.value = null; // Keep the last tool visible or clear it
+    onToolEnd: (tool: string, success: boolean, run_id?: string) => {
+      if (run_id) {
+         const index = activeTools.value.findIndex(t => t.id === run_id);
+         if (index > -1) activeTools.value.splice(index, 1);
+      } else {
+         // Fallback if no run_id (should not happen with new backend)
+         const index = activeTools.value.findIndex(t => t.name === tool);
+         if (index > -1) activeTools.value.splice(index, 1);
+      }
     }
   });
   loading.value = false;
-  currentTool.value = null;
+  activeTools.value = [];
   if (options.value.autoCompile && errors.value.length === 0) {
     await compileTranslatedCode();
   }

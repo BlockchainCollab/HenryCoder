@@ -3,6 +3,6 @@ uvicorn
 python-dotenv
 httpx
 openai
-langchain==1.0.8
+langchain==1.2.7
 langchain-openai==1.0.3
 aiohttp

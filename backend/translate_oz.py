@@ -133,7 +133,7 @@ def get_pretranslated_libs() -> dict[str, str]:
 
     return res
 
-# Preload the pretranslated libs for use in agent_service (keys are class/interface names in lowercase)"""
+# Preload the pretranslated libs for use in agent_service (keys are class/interface names in lowercase)
 PRETRANSLATED_LIBS = get_pretranslated_libs()
 
 

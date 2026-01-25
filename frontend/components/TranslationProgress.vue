@@ -34,7 +34,7 @@
   </div>
 
   <!-- Expanded Mode -->
-  <div v-else class="flex flex-col items-center justify-center relative w-full h-full bg-[#242322]/60 backdrop-blur-md z-30 overflow-y-auto custom-scrollbar">
+  <div v-else class="flex flex-col items-center justify-center relative w-full h-full bg-[#242322]/50 backdrop-blur-md z-30 overflow-y-auto custom-scrollbar">
     <!-- Minimize button -->
     <button
       @click="$emit('toggle-minimize')"

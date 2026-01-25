@@ -176,7 +176,7 @@ class RalphSource(BaseModel):
         for g_struct in self.global_structs:
             lines.append(f"struct {g_struct.name} {{")
             for struct_field in g_struct.fields:
-                lines.append(f"    {struct_field.name}: {struct_field.type},") 
+                lines.append(f"  mut {struct_field.name}: {struct_field.type},") 
             lines.append("}")
             lines.extend(TWO_EMPTY_LINES)
 
@@ -462,7 +462,7 @@ def createGlobalStruct(struct: Struct) -> str:
         if not f.name[0].islower():
             return f"Error: Struct field '{f.name}' must start with a lowercase letter."
     source.global_structs.append(struct)
-    return f"Created global struct {struct.name}"
+    return f"Created global struct {struct.name} with mutable fields ({', '.join(f.name for f in struct.fields)})"
 
 @tool
 def createGlobalEnum(enum: RalphEnum) -> str:

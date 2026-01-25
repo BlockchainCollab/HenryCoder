@@ -4,5 +4,5 @@ python-dotenv
 httpx
 openai
 langchain==1.2.7
-langchain-openai==1.0.3
+langchain-openai==1.1.7
 aiohttp

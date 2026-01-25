@@ -34,7 +34,7 @@
   </div>
 
   <!-- Expanded Mode -->
-  <div v-else class="flex flex-col items-center justify-center relative w-full h-full bg-[#242322]/50 backdrop-blur-md z-30 overflow-y-auto custom-scrollbar">
+  <div v-else class="flex flex-col items-center justify-center relative w-full h-full bg-[#242322]/40 backdrop-blur-md z-30 overflow-y-auto custom-scrollbar">
     <!-- Minimize button -->
     <button
       @click="$emit('toggle-minimize')"
@@ -235,7 +235,7 @@
             </h3>
             <p
               v-if="index === currentStage"
-              class="text-sm text-[#E5DED7] opacity-80 mt-1 font-mono break-words"
+              class="text-sm text-[#E5DED7] mt-1 font-mono break-words"
             >
               {{ statusMessage || "Working..." }}
             </p>

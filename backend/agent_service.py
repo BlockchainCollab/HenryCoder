@@ -5,6 +5,7 @@ Using Reworked Agentic System V2 with granular state manipulation tools.
 """
 import aiohttp
 import asyncio
+import contextvars
 import logging
 import os
 import re
@@ -44,15 +45,13 @@ LLM_MODEL = os.getenv("LLM_MODEL", "mistralai/devstral-2512:free")
 
 # --- Global Context Management ---
 
-_current_session_options: Optional[Dict[str, Any]] = None
-_current_translation_queue: Optional[asyncio.Queue] = None
-_current_session_id: Optional[str] = None
-_current_solidity_source: Optional[str] = None
+_session_options_var: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars.ContextVar("session_options", default=None)
+_translation_queue_var: contextvars.ContextVar[Optional[asyncio.Queue]] = contextvars.ContextVar("translation_queue", default=None)
+_session_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("session_id", default=None)
+_solidity_source_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("solidity_source", default=None)
 
 def get_current_session_options() -> Dict[str, Any]:
-    if _current_session_options:
-        return _current_session_options
-    return {
+    return _session_options_var.get() or {
         "optimize": False,
         "include_comments": True,
         "mimic_defaults": False,
@@ -61,26 +60,22 @@ def get_current_session_options() -> Dict[str, Any]:
     }
 
 def set_session_options_context(options: Optional[Dict[str, Any]]) -> None:
-    global _current_session_options
-    _current_session_options = options
+    _session_options_var.set(options)
 
 def get_translation_queue() -> Optional[asyncio.Queue]:
-    return _current_translation_queue
+    return _translation_queue_var.get()
 
 def set_translation_queue(q: Optional[asyncio.Queue]) -> None:
-    global _current_translation_queue
-    _current_translation_queue = q
+    _translation_queue_var.set(q)
 
 def set_current_session_id(session_id: Optional[str]) -> None:
-    global _current_session_id
-    _current_session_id = session_id
+    _session_id_var.set(session_id)
 
 def get_current_solidity_source() -> Optional[str]:
-    return _current_solidity_source
+    return _solidity_source_var.get()
 
 def set_current_solidity_source(source: Optional[str]) -> None:
-    global _current_solidity_source
-    _current_solidity_source = source
+    _solidity_source_var.set(source)
 
 async def emit_translation_chunk(chunk: str) -> None:
     queue = get_translation_queue()
@@ -321,18 +316,20 @@ _sessions: Dict[str, RalphSource] = {}
 _session_locks: Dict[str, asyncio.Lock] = {}
 
 def get_session_source() -> RalphSource:
-    if not _current_session_id:
+    session_id = _session_id_var.get()
+    if not session_id:
         raise ValueError("No active session ID")
-    if _current_session_id not in _sessions:
-        _sessions[_current_session_id] = RalphSource()
-    return _sessions[_current_session_id]
+    if session_id not in _sessions:
+        _sessions[session_id] = RalphSource()
+    return _sessions[session_id]
 
 def get_session_lock() -> asyncio.Lock:
-    if not _current_session_id:
+    session_id = _session_id_var.get()
+    if not session_id:
         raise ValueError("No active session ID")
-    if _current_session_id not in _session_locks:
-        _session_locks[_current_session_id] = asyncio.Lock()
-    return _session_locks[_current_session_id]
+    if session_id not in _session_locks:
+        _session_locks[session_id] = asyncio.Lock()
+    return _session_locks[session_id]
 
 def _safe_parse_fields(fields: Any) -> List[Field]:
     """Helper to safely parse fields that might be malformed by the LLM."""

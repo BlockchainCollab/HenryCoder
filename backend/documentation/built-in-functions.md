@@ -32,7 +32,10 @@ Returns the address which called the smart contract
 fn <map>.insert!(value: Any) -> ()
 ```
 
-Insert a key/value pair into the map. No brace syntax is required, as the minimal storage deposit will be deducted from the approved assets by the VM
+**REQUIRED ANNOTATION**
+preapprovedAssets = true
+
+Insert a key/value pair into the map. Don't use brace syntax, but the minimal storage deposit will be deducted from the preapproved assets
 
 > @param **depositorAddress** *the address to pay the minimal storage deposit (0.1 ALPH) for the new map entry. If not provided, minimal storage deposit will be paid by the transaction caller*
 >

@@ -15,7 +15,7 @@
       style="overflow-x: hidden"
     >
       <div class="animate-marquee flex items-center min-w-full w-full">
-        <span class="mx-4">EVM CODE TO RALPH</span>
+        <span class="mx-4">V2 RELEASE</span>
         <span class="mx-4 inline-block">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -76,7 +76,7 @@
           </svg>
         </span>
         <!-- Repeat for continuous scroll -->
-        <span class="mx-4">EVM CODE TO RALPH</span>
+        <span class="mx-4">BETTER AND SMARTER</span>
         <span class="mx-4 inline-block">
           <svg
             xmlns="http://www.w3.org/2000/svg"

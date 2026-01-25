@@ -897,6 +897,8 @@ class ChatAgent:
             del self.session_options[session_id]
         if session_id in _sessions:
             del _sessions[session_id]
+        if session_id in _session_locks:
+            del _session_locks[session_id]
 
     async def chat(
         self,
@@ -1135,6 +1137,9 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
                         return {"success": True}
                     else:
                         error_text = await resp.text()
+                        # Check for abstract contract message (not a real error)
+                        if "Code generation is not supported for abstract contract" in error_text:
+                            return {"success": True}
                         return {"success": False, "error": error_text}
         except Exception as e:
             logger.error(f"Compilation check failed: {e}")

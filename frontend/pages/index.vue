@@ -886,7 +886,7 @@ const downloadTranslatedCode = () => {
     });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "translated_code.ralph";
+    link.download = "translated_code.ral";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

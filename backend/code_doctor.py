@@ -410,6 +410,14 @@ class CodeDoctor:
         if re.search(r'createSubContract!\s*\{', clean_body):
             flags['preapprovedAssets'] = True
             
+        # copyCreateContract! with asset transfer requires preapprovedAssets = true
+        if re.search(r'copyCreateContract!\s*\{', clean_body):
+            flags['preapprovedAssets'] = True
+            
+        # copyCreateSubContract! with asset transfer requires preapprovedAssets = true
+        if re.search(r'copyCreateSubContract!\s*\{', clean_body):
+            flags['preapprovedAssets'] = True
+            
         # Rule 7: insert! requires preapprovedAssets
         if 'insert!' in clean_body:
             flags['preapprovedAssets'] = True

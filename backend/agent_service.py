@@ -29,7 +29,7 @@ load_dotenv()
 
 # Configure logging
 logger = logging.getLogger(__name__)
-log_level = os.getenv("LOG_LEVEL", "WARNING")
+log_level = os.getenv("LOG_LEVEL", "INFO")
 logger.setLevel(getattr(logging, log_level.upper()))
 # Create console handler if not already present
 if not logger.handlers:

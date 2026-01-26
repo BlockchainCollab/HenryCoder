@@ -454,48 +454,95 @@
                 </div>
               </section>
             </div>
-            <!-- Error Display Section (Pinned to bottom with close button) -->
-            <div
-              v-if="errors.length > 0 && !loading && errorsOpen"
-              class="absolute bottom-0 left-0 right-0 p-3 pl-6 flex gap-x-[10px] bg-[#2A1A1A] rounded-[10px] border border-[#E15959] shadow-[0_0_6px_1px_rgba(225,89,89,0.70)]"
-            >
-              <div class="flex-1 max-h-32 overflow-y-auto">
-                <ul
-                  class="text-[#E15959] text-[length:16px] font-semibold leading-6"
-                >
-                  <li
-                    v-for="(error, index) in errors"
-                    :key="index"
-                    class="font-mono text-xs"
+            <!-- Messages Section (Pinned to bottom) -->
+            <div class="absolute bottom-0 left-0 right-0 flex flex-col gap-1 items-stretch z-10 pointer-events-none">
+              <!-- Error Display Section -->
+              <div
+                v-if="errors.length > 0 && !loading && errorsOpen"
+                class="pointer-events-auto p-3 pl-6 flex gap-x-[10px] bg-[#2A1A1A] rounded-[10px] border border-[#E15959] shadow-[0_0_6px_1px_rgba(225,89,89,0.70)] mx-2 mb-1"
+              >
+                <div class="flex-1 max-h-32 overflow-y-auto">
+                  <ul
+                    class="text-[#E15959] text-[length:16px] font-semibold leading-6"
                   >
-                    {{ error }}
-                  </li>
-                </ul>
+                    <li
+                      v-for="(error, index) in errors"
+                      :key="index"
+                      class="font-mono text-xs"
+                    >
+                      {{ error }}
+                    </li>
+                  </ul>
+                </div>
+                <button class="h-fit w-fit" @click="closeErrors">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="21"
+                    viewBox="0 0 20 21"
+                    fill="none"
+                  >
+                    <path
+                      d="M15 5.34399L5 15.344"
+                      stroke="#E15959"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M5 5.34399L15 15.344"
+                      stroke="#E15959"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </button>
               </div>
-              <button class="h-fit w-fit" @click="closeErrors">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="21"
-                  viewBox="0 0 20 21"
-                  fill="none"
-                >
-                  <path
-                    d="M15 5.34399L5 15.344"
-                    stroke="#E15959"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M5 5.34399L15 15.344"
-                    stroke="#E15959"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-              </button>
+
+              <!-- Warning Display Section -->
+              <div
+                v-if="warnings.length > 0 && !loading && warningsOpen"
+                class="pointer-events-auto p-3 pl-6 flex gap-x-[10px] bg-[#2A1A1A] rounded-[10px] border border-[#EF8510] shadow-[0_0_6px_1px_rgba(239,133,16,0.70)] mx-2 mb-2"
+              >
+                <div class="flex-1 max-h-32 overflow-y-auto">
+                  <ul
+                    class="text-[#EF8510] text-[length:16px] font-semibold leading-6"
+                  >
+                    <li
+                      v-for="(warning, index) in warnings"
+                      :key="index"
+                      class="font-mono text-xs"
+                    >
+                      Warning: {{ warning }}
+                    </li>
+                  </ul>
+                </div>
+                <button class="h-fit w-fit" @click="closeWarnings">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="21"
+                    viewBox="0 0 20 21"
+                    fill="none"
+                  >
+                    <path
+                      d="M15 5.34399L5 15.344"
+                      stroke="#EF8510"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M5 5.34399L15 15.344"
+                      stroke="#EF8510"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           <div
@@ -662,6 +709,7 @@ const activeTools = ref<ActiveTool[]>([]);
 const compiled = ref(false);
 const upgradeCounter = ref(0);
 const errors = ref<string[]>([]);
+const warnings = ref<string[]>([]);
 const successMessage = ref<string | null>(null);
 const currentProgressStep = ref(1);
 const options = ref({
@@ -679,6 +727,7 @@ const copied = ref(false);
 const isScrolled = ref(false);
 const consentOpen = ref(true);
 const errorsOpen = ref(true);
+const warningsOpen = ref(true);
 const progressMinimized = ref(false);
 const progressMode = ref<"translate" | "fix">("translate");
 const isLargeScreen = useMediaQuery("(min-width: 1024px)");
@@ -805,6 +854,10 @@ const closeErrors = () => {
   errorsOpen.value = false;
 };
 
+const closeWarnings = () => {
+  warningsOpen.value = false;
+};
+
 const translateCodeInner = async (
   initialOutputCode: string,
   previousTranslation?: PreviousTranslation
@@ -813,7 +866,9 @@ const translateCodeInner = async (
   loadingStatus.value = "";
   compiled.value = false;
   errors.value = [];
+  warnings.value = [];
   errorsOpen.value = true;
+  warningsOpen.value = true;
   successMessage.value = null;
   progressMinimized.value = false;
   currentProgressStep.value = 1;
@@ -896,6 +951,7 @@ const downloadTranslatedCode = () => {
 
 const compileTranslatedCode = async () => {
   successMessage.value = null;
+  warnings.value = [];
   await apiCompileTranslatedCode({
     outputCode: outputCode.value,
     runtimeConfig,
@@ -903,6 +959,10 @@ const compileTranslatedCode = async () => {
     onSuccess: (message?: string) => {
       errors.value = [];
       successMessage.value = message || "Compilation successful!";
+    },
+    onWarning: (val: string[]) => {
+      warnings.value = val;
+      warningsOpen.value = true;
     },
   });
   compiled.value = true;
@@ -934,6 +994,9 @@ const upgradeTranslatedCode = async () => {
       error: errors.value.join("\n"),
       solidityCode: sourceCode.value,
       runtimeConfig,
+      onCodeUpdate: (code) => {
+        outputCode.value = code;
+      },
       onStageUpdate: (stage, message) => {
         loadingStatus.value = message;
         

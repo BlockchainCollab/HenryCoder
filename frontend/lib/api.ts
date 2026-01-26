@@ -207,22 +207,28 @@ export async function compileTranslatedCode({
   runtimeConfig,
   onError,
   onSuccess,
+  onWarning,
 }: {
   outputCode: string;
   runtimeConfig: any;
   onError: (val: string[]) => void;
   onSuccess: (message?: string) => void;
+  onWarning?: (val: string[]) => void;
 }) {
   let node_endpoint = "/contracts/compile-project";
   let url = `${runtimeConfig.public.nodeUrl}${node_endpoint}`;
   let queryJson = {
     code: outputCode,
     compilerOptions: {
-      ignoreUnusedConstantsWarnings: true,
-      ignoreUnusedVariablesWarnings: true,
-      ignoreUnusedFieldsWarnings: true,
-      ignoreUnusedPrivateFunctionsWarnings: true,
-      ignoreUnusedFunctionReturnWarnings: true,
+      ignoreUnusedConstantsWarnings: false,
+      ignoreUnusedVariablesWarnings: false,
+      ignoreUnusedFieldsWarnings: false,
+      ignoreUnusedPrivateFunctionsWarnings: false,
+      ignoreUpdateFieldsCheckWarnings: false,
+      ignoreCheckExternalCallerWarnings: false,
+      ignoreUnusedFunctionReturnWarnings: false,
+      skipAbstractContractCheck: false,
+      skipTests: false,
     },
   };
   return fetch(url, {
@@ -257,7 +263,43 @@ export async function compileTranslatedCode({
         onError([errorMsg]);
         return;
       }
-      // Success: show green message
+      // Success: check for warnings and show green message
+      try {
+        const resJson = await response.json();
+        let allWarnings: string[] = [];
+        
+        // Collect top-level warnings
+        if (resJson.warnings && Array.isArray(resJson.warnings)) {
+            allWarnings = [...resJson.warnings];
+        }
+        
+        // Collect warnings from contracts
+        if (resJson.contracts && Array.isArray(resJson.contracts)) {
+            resJson.contracts.forEach((contract: any) => {
+                if (contract.warnings && Array.isArray(contract.warnings)) {
+                    allWarnings = [...allWarnings, ...contract.warnings];
+                }
+            });
+        }
+
+        // Collect warnings from scripts
+        if (resJson.scripts && Array.isArray(resJson.scripts)) {
+            resJson.scripts.forEach((script: any) => {
+                if (script.warnings && Array.isArray(script.warnings)) {
+                    allWarnings = [...allWarnings, ...script.warnings];
+                }
+            });
+        }
+
+        if (allWarnings.length > 0) {
+          // Treat warnings as errors
+          const warningMessages = allWarnings.map((w: string) => `Warning (treated as error): ${w}`);
+          onError(warningMessages);
+          return;
+        }
+      } catch (e) {
+        // ignore JSON parse errors on success if any
+      }
       onSuccess();
     })
     .catch((error) => {
@@ -276,6 +318,7 @@ export type FixCodeResult = {
 type FixStreamEvent =
   | { type: "stage"; data: { stage: string; message: string } }
   | { type: "result"; data: { fixed_code: string; iterations: number; success: boolean } }
+  | { type: "code_snapshot"; data: string }
   | { type: "error"; data: { message: string } };
 
 export async function fixRalphCode({
@@ -284,12 +327,14 @@ export async function fixRalphCode({
   solidityCode,
   runtimeConfig,
   onStageUpdate,
+  onCodeUpdate,
 }: {
   ralphCode: string;
   error: string;
   solidityCode?: string;
   runtimeConfig: any;
   onStageUpdate?: (stage: string, message: string) => void;
+  onCodeUpdate?: (code: string) => void;
 }): Promise<FixCodeResult> {
   const response = await fetch(`${runtimeConfig.public.apiBase}/chat/fix`, {
     method: "POST",
@@ -332,6 +377,8 @@ export async function fixRalphCode({
 
         if (event.type === "stage" && onStageUpdate) {
           onStageUpdate(event.data.stage, event.data.message);
+        } else if (event.type === "code_snapshot" && onCodeUpdate) {
+          onCodeUpdate(event.data);
         } else if (event.type === "result") {
           result = {
             fixedCode: event.data.fixed_code,

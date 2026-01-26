@@ -90,6 +90,7 @@ Abstract Contract AccessControl() implements IAccessControl {
   }
 
   // Internal function to grant role
+  @using(preapprovedAssets = true)
   fn grantRoleInternal(role: ByteVec, account: Address) -> Bool {
     // When creating/granting a role ensure the role identifier is 32 bytes
     ensureRoleIs32(role)

@@ -139,7 +139,7 @@ Abstract Contract NFTCollectionBase(
 
   // The NFT's contract ID is deterministically derived from the index
   // @@@ In Ralph, minting creates a new sub-contract for the NFT
-  @using(updateFields = true)
+  @using(preapprovedAssets = true, updateFields = true)
   fn innerMint(to: Address, tokenUri: ByteVec) -> ByteVec {
     let index = nftcollectionMetadata.totalSupply
     let (encodedImmFields, encodedMutFields) = NFT.encodeFields!(
@@ -151,7 +151,9 @@ Abstract Contract NFTCollectionBase(
     )
     
     // Create sub-contract with index as path
-    let nftContractId = copyCreateSubContractWithToken!(
+    let nftContractId = copyCreateSubContractWithToken!{
+      to -> ALPH: minimalContractDeposit!()
+    }(
       toByteVec!(index),
       nftTemplateId,
       encodedImmFields,
@@ -165,7 +167,7 @@ Abstract Contract NFTCollectionBase(
   }
 
   // @@@ Ralph requires to pass tokenOwner in brace notation and as parameter. The refund address is where ALPH storage deposit will go.
-  @using(preapprovedAssets = true, checkExternalCaller = false)
+  @using(preapprovedAssets = true)
   fn innerBurn(nftIndex: U256, refundAddress: Address, tokenOwner: Address) -> () {
     let nft = NFT(contractId!(nftByIndex(nftIndex)))
     nft.burn{tokenOwner -> tokenId!(nft): 1}(refundAddress, tokenOwner)

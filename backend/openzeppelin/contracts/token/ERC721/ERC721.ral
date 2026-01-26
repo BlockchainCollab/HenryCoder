@@ -59,8 +59,9 @@ Contract NFT(
   // =========================================================================
   // Destroys this NFT sub-contract permanently.
   // @@@ In Ralph, burning an NFT means destroying its sub-contract.
-  @using(preapprovedAssets = true, checkExternalCaller = false, assetsInContract = true)
+  @using(preapprovedAssets = true, assetsInContract = true)
   pub fn burn(refundAddress: Address, tokenOwner: Address) -> () {
+    checkCaller!(callerContractId!() == nftMetadata.collectionId, NFTNotAuthorized)
     // burn the NFT token from the owner to prove ownership
     burnToken!(tokenOwner, selfTokenId!(), 1)
     // Now the NFT contract holds the token - can self destroy

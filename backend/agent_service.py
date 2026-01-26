@@ -298,12 +298,12 @@ class RalphSource(BaseModel):
             # 5. Methods
             if contr.methods or tag_body == cname:
                 if tag_body == cname:
-                    lines.append("<|fim_start|>")
+                    lines.append("  <|fim_start|>")
 
                 # It's multiline content, but appending it directly may still work as expected.
                 lines.append("  " + contr.methods)
                 if tag_body == cname:
-                    lines.append("<|fim_end|>")
+                    lines.append("  <|fim_end|>")
 
             lines.append("}")
             lines.extend(TWO_EMPTY_LINES)
@@ -763,6 +763,36 @@ def loadPreTranslatedLibrary(libraryName: str) -> str:
     """
     source = get_session_source()
     
+    # Check for duplicates in already loaded hidden contracts and interfaces
+    hidden_contracts = [name for name, c in source.contracts.items() if c.hidden]
+    hidden_interfaces = [name for name, i in source.interfaces.items() if i.hidden]
+    
+    if libraryName in hidden_contracts or libraryName in hidden_interfaces:
+        return f"Warning: PreTranslated Library {libraryName} is already loaded in the scope."
+    
+    # Auto-import corresponding interface for ERC20/ERC721
+    interface_mapping = {"ERC20": "IERC20", "ERC721": "IERC721"}
+    also_loaded_interface = None
+    if libraryName in interface_mapping:
+        interface_name = interface_mapping[libraryName]
+        if interface_name not in hidden_interfaces:
+            interface_result = get_pretranslated_code(interface_name)
+            if interface_result:
+                interface_content, interface_specs = interface_result
+                source.preTranslated += "\n\n" + interface_content
+                also_loaded_interface = interface_name
+                if interface_specs:
+                    for spec in interface_specs:
+                        name = spec.get("name")
+                        type_ = spec.get("type")
+                        if type_ == "interface":
+                            parents = spec.get("parent_contracts", []) + spec.get("parent_interfaces", [])
+                            source.interfaces[name] = Interface(
+                                name=name,
+                                hidden=True,
+                                parents=parents
+                            )
+    
     # Try direct match
     result = get_pretranslated_code(libraryName)
 
@@ -795,9 +825,13 @@ def loadPreTranslatedLibrary(libraryName: str) -> str:
                         parent_interfaces=spec.get("parent_interfaces", [])
                     )
 
-        return f"Loaded library {libraryName} and added to source scope. Content:\n{content}"
+        loaded_msg = f"Loaded PreTranslated library {libraryName}"
+        if also_loaded_interface:
+            loaded_msg += f" (also auto-loaded {also_loaded_interface})"
+        loaded_msg += f" and added to source scope. Content:\n{content}"
+        return loaded_msg
     
-    return f"Library {libraryName} not found."
+    return f"Error: PreTranslated library {libraryName} not found."
 
 @tool
 def finalizeAndRenderTranslation() -> str:
@@ -1194,6 +1228,7 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
                             if warnings:
                                 # Treat warnings as errors
                                 error_msg = "Compilation Warnings (treated as errors):\n" + "\n".join(warnings)
+                                logger.info(f"Compilation warnings (treated as errors):\n{error_msg}")
                                 return {"success": False, "error": error_msg}
                         except Exception:
                             warnings = []
@@ -1203,6 +1238,7 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
                         # Check for abstract contract message (not a real error)
                         if "Code generation is not supported for abstract contract" in error_text:
                             return {"success": True}
+                        logger.info(f"Compilation error:\n{error_text}")
                         return {"success": False, "error": error_text}
         except Exception as e:
             logger.error(f"Compilation check failed: {e}")

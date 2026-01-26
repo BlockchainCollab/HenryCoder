@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field as PydanticField
 from translation_context import RALPH_DETAILS
 from translation_service import SYSTEM_PROMPT as TRANSLATION_SYSTEM_PROMPT, perform_fim_translation
 from translate_oz import PRETRANSLATED_LIBS, get_pretranslated_code
+from code_doctor import fix_common_errors
 
 # Type for translation chunk callback
 TranslationChunkCallback = Callable[[str], None]
@@ -560,6 +561,14 @@ async def translateFunctions(interfaceOrContractName: str) -> str:
 
         # Clean content and remove markdown fences if present
         cleaned_content = _extract_ralph_code(full_content)
+        
+        # Get mapping names from the contract to pass to code doctor
+        mapping_names = set()
+        if interfaceOrContractName in source.contracts:
+            mapping_names = set(source.contracts[interfaceOrContractName].maps.keys())
+        
+        # Apply code doctor with mapping context
+        cleaned_content = fix_common_errors(cleaned_content, mappings=mapping_names)
 
         if interfaceOrContractName in source.contracts:
             source.contracts[interfaceOrContractName].methods = cleaned_content
@@ -653,31 +662,43 @@ def removeMutableFieldFromContract(contractName: str, fieldName: str) -> str:
 
 @tool
 def addMapsToContract(contractName: str, maps: List[Dict[str, Any]]) -> str:
-    """Adds maps to a contract. Input list of {name, key_type, value_type}."""
+    """
+    Adds maps (mappings) to a contract. Map names must start with a lowercase letter.
+    
+    Args:
+        contractName: Name of the contract to add maps to.
+        maps: List of map definitions, each with {name, key_type, value_type}.
+              key_type must be one of: Bool, U256, I256, Address, ByteVec.
+              value_type can be any Ralph type.
+    """
     source = get_session_source()
     if contractName not in source.contracts:
         return f"Error: Contract {contractName} not found."
+    
+    added_maps = []
     for m in maps:
         if not isinstance(m, dict):
             continue
-        # Assuming format {name: 'foo', key_type: 'Address', value_type: 'U256'}
-        # But MapDef expects key_type, value_type
-        # We need to parse correctly.
-        # The schema in requirements: Map: {key_type: "Bool" | "U256" | "I256" | "Address" | "ByteVec", value_type: string }
-        # And Contract has "maps: Map[]" which implies name is somewhere.
-        # Reworked.md says: `addMapsToContract(contractName: string, maps: Map[]): void`
-        # But `Contract` struct in reworked.md says `maps: Map[]`. 
-        # Map definition in reworked.md: `{key_type: ..., value_type: ...}`. It misses the NAME.
-        # I will assume the input dictionary has a 'name' field for the map variable name.
         m_name = m.get('name')
         if not m_name:
             continue
+        
+        # Validate map name starts with lowercase
+        if not m_name[0].islower():
+            return f"Error: Map name '{m_name}' must start with a lowercase letter."
+        
         key_type = m.get('key_type')
         value_type = m.get('value_type')
         if not key_type or not value_type:
             continue
+        
+        # Validate value_type is not a mapping (nested mappings not allowed in Ralph)
+        if 'mapping' in value_type.lower():
+            return f"Error: Nested mappings are not allowed in Ralph. Map '{m_name}' has a mapping as value_type."
         source.contracts[contractName].maps[m_name] = MapDef(key_type=key_type, value_type=value_type)
-    return f"Added {len(maps)} maps to {contractName}"
+        added_maps.append(m_name)
+    
+    return f"Added maps ({', '.join(added_maps)}) to {contractName}"
 
 @tool
 def addEventsToContract(contractName: str, events: List[EventDef]) -> str:
@@ -932,78 +953,98 @@ class ChatAgent:
             
             final_output = ""
             
-            # We process the stream from the compiled graph using an iterator to allow
-            # concurrent draining of the translation_chunk_queue.
-            agent_aiter = self.agent.astream_events(
-                {"messages": chat_history + [{"role": "user", "content": message}]},
-                version="v1"
-            ).__aiter__()
+            # Retry configuration
+            max_retries = 1
+            retry_count = 0
+            last_error = None
             
-            agent_task = asyncio.create_task(agent_aiter.__anext__())
-            queue_task = asyncio.create_task(translation_chunk_queue.get())
-            
-            try:
-                while True:
-                    done, _ = await asyncio.wait(
-                        [agent_task, queue_task],
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
+            while retry_count <= max_retries:
+                try:
+                    # We process the stream from the compiled graph using an iterator to allow
+                    # concurrent draining of the translation_chunk_queue.
+                    agent_aiter = self.agent.astream_events(
+                        {"messages": chat_history + [{"role": "user", "content": message}]},
+                        version="v1"
+                    ).__aiter__()
                     
-                    if queue_task in done:
-                        try:
-                            item = queue_task.result()
-                            yield item
-                        except Exception as e:
-                            logger.error(f"Error reading from translation queue: {e}")
-                        queue_task = asyncio.create_task(translation_chunk_queue.get())
-                        
-                    if agent_task in done:
-                        try:
-                            event = agent_task.result()
+                    agent_task = asyncio.create_task(agent_aiter.__anext__())
+                    queue_task = asyncio.create_task(translation_chunk_queue.get())
+            
+                    try:
+                        while True:
+                            done, _ = await asyncio.wait(
+                                [agent_task, queue_task],
+                                return_when=asyncio.FIRST_COMPLETED
+                            )
                             
-                            kind = event["event"]
-                            run_id = event.get("run_id")
-                            
-                            if kind == "on_tool_start":
-                                name = event.get('name', 'unknown_tool')
-                                inputs = event['data'].get('input')
-                                # format input for display if it's a dict
-                                input_str = str(inputs)
-                                yield StreamEvent.tool_start(name, input_str, run_id)
-                            
-                            elif kind == "on_tool_end":
-                                name = event.get('name', 'unknown_tool')
-                                yield StreamEvent.tool_end(name, success=True, run_id=run_id)
-                                # Render and yield code snapshot after each tool
+                            if queue_task in done:
                                 try:
-                                    source = get_session_source()
-                                    code_snapshot = source.render()
-                                    yield StreamEvent.code_snapshot(code_snapshot)
-                                except Exception as render_err:
-                                    logger.warning(f"Failed to render code snapshot: {render_err}")
-                            
-                            elif kind == "on_chat_model_stream":
-                                # We can stream tokens if we want, but for tool usage we often want the final result
-                                # But the requirement asks for tool events mostly.
-                                # If there is content output (non-tool), we can capture it.
-                                chunk = event['data'].get('chunk')
-                                if chunk and hasattr(chunk, 'content') and chunk.content:
-                                     final_output += chunk.content
-                                     # If we want to stream text content to user:
-                                     # yield StreamEvent.content(chunk.content))
-                            
-                            agent_task = asyncio.create_task(agent_aiter.__anext__())
-                        except StopAsyncIteration:
-                            # Finished agent stream. Drain remaining queue items.
+                                    item = queue_task.result()
+                                    yield item
+                                except Exception as e:
+                                    logger.error(f"Error reading from translation queue: {e}")
+                                queue_task = asyncio.create_task(translation_chunk_queue.get())
+                                
+                            if agent_task in done:
+                                try:
+                                    event = agent_task.result()
+                                    
+                                    kind = event["event"]
+                                    run_id = event.get("run_id")
+                                    
+                                    if kind == "on_tool_start":
+                                        name = event.get('name', 'unknown_tool')
+                                        inputs = event['data'].get('input')
+                                        # format input for display if it's a dict
+                                        input_str = str(inputs)
+                                        yield StreamEvent.tool_start(name, input_str, run_id)
+                                    
+                                    elif kind == "on_tool_end":
+                                        name = event.get('name', 'unknown_tool')
+                                        yield StreamEvent.tool_end(name, success=True, run_id=run_id)
+                                        # Render and yield code snapshot after each tool
+                                        try:
+                                            source = get_session_source()
+                                            code_snapshot = source.render()
+                                            yield StreamEvent.code_snapshot(code_snapshot)
+                                        except Exception as render_err:
+                                            logger.warning(f"Failed to render code snapshot: {render_err}")
+                                    
+                                    elif kind == "on_chat_model_stream":
+                                        # We can stream tokens if we want, but for tool usage we often want the final result
+                                        # But the requirement asks for tool events mostly.
+                                        # If there is content output (non-tool), we can capture it.
+                                        chunk = event['data'].get('chunk')
+                                        if chunk and hasattr(chunk, 'content') and chunk.content:
+                                             final_output += chunk.content
+                                             # If we want to stream text content to user:
+                                             # yield StreamEvent.content(chunk.content))
+                                    
+                                    agent_task = asyncio.create_task(agent_aiter.__anext__())
+                                except StopAsyncIteration:
+                                    # Finished agent stream. Drain remaining queue items.
+                                    queue_task.cancel()
+                                    while not translation_chunk_queue.empty():
+                                        yield translation_chunk_queue.get_nowait()
+                                    break
+                    finally:
+                        if not agent_task.done():
+                            agent_task.cancel()
+                        if not queue_task.done():
                             queue_task.cancel()
-                            while not translation_chunk_queue.empty():
-                                yield translation_chunk_queue.get_nowait()
-                            break
-            finally:
-                if not agent_task.done():
-                    agent_task.cancel()
-                if not queue_task.done():
-                    queue_task.cancel()
+                    
+                    # If we get here without exception, break out of retry loop
+                    break
+                    
+                except Exception as e:
+                    last_error = e
+                    retry_count += 1
+                    if retry_count <= max_retries:
+                        logger.warning(f"Agent stream error, retrying ({retry_count}/{max_retries}): {e}")
+                        yield StreamEvent.stage("retrying", f"Retrying... ({retry_count}/{max_retries})")
+                        await asyncio.sleep(0.5)  # Brief delay before retry
+                    else:
+                        raise last_error
 
             yield StreamEvent.stage("done")
             
@@ -1081,6 +1122,9 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
                 
                 current_code = fixed_code
                 
+                # Emit code snapshot
+                yield StreamEvent.code_snapshot(fixed_code)
+                
                 # Check compilation
                 compile_result = await self._compile_ralph_code(fixed_code)
                 
@@ -1122,11 +1166,15 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
         compile_request = {
             "code": code,
             "compilerOptions": {
-                "ignoreUnusedConstantsWarnings": True,
-                "ignoreUnusedVariablesWarnings": True,
-                "ignoreUnusedFieldsWarnings": True,
-                "ignoreUnusedPrivateFunctionsWarnings": True,
-                "ignoreUnusedFunctionReturnWarnings": True,
+                "ignoreUnusedConstantsWarnings": False,
+                "ignoreUnusedVariablesWarnings": False,
+                "ignoreUnusedFieldsWarnings": False,
+                "ignoreUnusedPrivateFunctionsWarnings": False,
+                "ignoreUpdateFieldsCheckWarnings": False,
+                "ignoreCheckExternalCallerWarnings": False,
+                "ignoreUnusedFunctionReturnWarnings": False,
+                "skipAbstractContractCheck": False,
+                "skipTests": False
             }
         }
         
@@ -1134,7 +1182,22 @@ COMPLETE RALPH CODE (you must return ALL of it with only the error fixed):
             async with aiohttp.ClientSession() as session:
                 async with session.post(compile_endpoint, json=compile_request) as resp:
                     if resp.status == 200:
-                        return {"success": True}
+                        try:
+                            result = await resp.json()
+                            warnings = result.get("warnings", [])
+                            # Also collect warnings from contracts and scripts
+                            for contract in result.get("contracts", []):
+                                warnings.extend(contract.get("warnings", []))
+                            for script in result.get("scripts", []):
+                                warnings.extend(script.get("warnings", []))
+                                
+                            if warnings:
+                                # Treat warnings as errors
+                                error_msg = "Compilation Warnings (treated as errors):\n" + "\n".join(warnings)
+                                return {"success": False, "error": error_msg}
+                        except Exception:
+                            warnings = []
+                        return {"success": True, "warnings": warnings}
                     else:
                         error_text = await resp.text()
                         # Check for abstract contract message (not a real error)

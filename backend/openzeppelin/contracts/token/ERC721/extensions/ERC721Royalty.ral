@@ -40,6 +40,7 @@ Abstract Contract NFTCollectionRoyalty(
   // =========================================================================
   // Internal: Set per-token royalty
   // =========================================================================
+  @using(preapprovedAssets = true)
   fn setTokenRoyalty(tokenId: U256, recipient: Address, bps: U256) -> () {
     assert!(bps <= MaxBps, NFTCollectionRoyaltyInvalidBps)  // Royalty cannot exceed 100%
     if (tokenRoyalty.contains!(tokenId)) {

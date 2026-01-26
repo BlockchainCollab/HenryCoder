@@ -90,7 +90,7 @@ def build_fim_system_prompt() -> str:
         "8. Do NOT duplicate methods found in parent contracts.\n"
         "9. Every translated function can include an additional comment explaining the differences in behavior between Solidity and Ralph, if present. These comments must be one line long and start with '// @@@'.\n"
         "   Example: // @@@ Solidity allows dynamic array parameters, but Ralph only supports fixed-size arrays.\n\n"
-        "10. Use curly braces syntax when calling functions (even when calling own functions) that have preapprovedAssets annotation\n\n"
+        "10. Use curly braces syntax when calling functions (even when calling own functions) defined with preapprovedAssets annotation\n\n"
         f"Ralph Language Details:\n\n{RALPH_DETAILS}"
     )
 

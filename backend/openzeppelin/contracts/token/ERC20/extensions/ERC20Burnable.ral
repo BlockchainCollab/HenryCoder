@@ -12,7 +12,7 @@ Abstract Contract FungibleTokenBurnable(mut tokenMetadata: FungibleTokenMetadata
     // Usage:
     //   token.burn{caller -> tokenId: amount}(amount)
     // @@@ Burn in ERC20 sense - tokens are not removed permanently
-    @using(preapprovedAssets = true, checkExternalCaller = false)
+    @using(preapprovedAssets = true, checkExternalCaller = false, updateFields = true, payToContractOnly = true)
     pub fn burn(amount: U256) -> () {
         transferTokenToSelf!(callerAddress!(), selfTokenId!(), amount)
         tokenMetadata.totalSupply = tokenMetadata.totalSupply - amount
@@ -25,7 +25,7 @@ Abstract Contract FungibleTokenBurnable(mut tokenMetadata: FungibleTokenMetadata
     //   token.burnFrom{owner -> tokenId: amount}(owner, amount)
     //
     // @@@ `from` address MUST be part of the transaction (signing or approving assets), whereas in ERC20 the owner can pre-approve and the spender can burn later without owner involvement.
-    @using(preapprovedAssets = true, checkExternalCaller = false)
+    @using(preapprovedAssets = true, checkExternalCaller = false, updateFields = true, payToContractOnly = true)
     pub fn burnFrom(from: Address, amount: U256) -> () {
         transferTokenToSelf!(from, selfTokenId!(), amount)
         tokenMetadata.totalSupply = tokenMetadata.totalSupply - amount

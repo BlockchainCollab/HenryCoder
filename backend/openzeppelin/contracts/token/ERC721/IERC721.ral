@@ -1,18 +1,5 @@
 // Ralph Translation of IERC721
 // =============================
-
-@std(id = #0003)
-@using(methodSelector = false)
-Interface INFT {
-   // Token Uri points to a json file containing metadata for the NFT. 
-   // The schema of the json file is available at https://github.com/alephium/alephium-web3/blob/master/packages/web3/std/nft_interface.ral
-   pub fn getTokenUri() -> ByteVec
-
-   // Returns collection id and index of the NFT in the collection.
-   pub fn getCollectionIndex() -> (ByteVec, U256)
-}
-
-
 @std(id = #0002)
 @using(methodSelector = false)
 Interface INFTCollection {
@@ -35,3 +22,19 @@ Interface INFTCollection {
 // UNSUPPORTED: event Transfer(from, to, tokenId) -> NFTs are sub-contracts, ownership is tracked via subContractId!()
 // UNSUPPORTED: event Approval(owner, approved, tokenId) -> Not needed, per-transaction approvals via brace syntax
 // UNSUPPORTED: event ApprovalForAll(owner, operator, approved) -> Not applicable in Ralph's model
+
+
+// Child contract interface. In Ralph NFTs are separate sub-contracts.
+// ONLY the child contract should implement INFT, the ERC721 equivalent contract implements INFTCollection.
+@std(id = #0003)
+@using(methodSelector = false)
+Interface INFT {
+   // Token Uri points to a json file containing metadata for the NFT. 
+   // The schema of the json file is available at https://github.com/alephium/alephium-web3/blob/master/packages/web3/std/nft_interface.ral
+   pub fn getTokenUri() -> ByteVec
+
+   // Returns collection id and index of the NFT in the collection.
+   pub fn getCollectionIndex() -> (ByteVec, U256)
+}
+
+

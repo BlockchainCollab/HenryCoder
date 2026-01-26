@@ -780,20 +780,24 @@ def loadPreTranslatedLibrary(libraryName: str) -> str:
     also_loaded_interface = None
     if libraryName in interface_mapping:
         interface_name = interface_mapping[libraryName]
-        if interface_name not in hidden_interfaces:
-            interface_result = get_pretranslated_code(interface_name)
+        interface_result = get_pretranslated_code(interface_name)
+        # Check if already loaded by either Solidity name OR Ralph name from spec
+        ralph_names = [spec.get("name") for spec in (interface_result[1] if interface_result else [])]
+        already_loaded = interface_name in hidden_interfaces or any(rn in hidden_interfaces for rn in ralph_names)
+        if interface_result and not already_loaded:
             if interface_result:
                 interface_content, interface_specs = interface_result
                 source.preTranslated += "\n\n" + interface_content
                 also_loaded_interface = interface_name
                 if interface_specs:
                     for spec in interface_specs:
-                        name = spec.get("name")
+                        ralph_name = spec.get("name")
                         type_ = spec.get("type")
                         if type_ == "interface":
                             parents = spec.get("parent_contracts", []) + spec.get("parent_interfaces", [])
-                            source.interfaces[name] = Interface(
-                                name=name,
+                            # Store under Ralph name
+                            source.interfaces[ralph_name] = Interface(
+                                name=ralph_name,
                                 hidden=True,
                                 parents=parents
                             )
@@ -807,21 +811,21 @@ def loadPreTranslatedLibrary(libraryName: str) -> str:
         
         if specs:
             for spec in specs:
-                name = spec.get("name")
+                ralph_name = spec.get("name")
                 type_ = spec.get("type")
                 
                 if type_ == "interface":
                     # For interfaces, combine parents
                     parents = spec.get("parent_contracts", []) + spec.get("parent_interfaces", [])
-                    source.interfaces[name] = Interface(
-                        name=name,
+                    source.interfaces[ralph_name] = Interface(
+                        name=ralph_name,
                         hidden=True,
                         parents=parents
                     )
                 else:
                     # For contracts
-                    source.contracts[name] = Contract(
-                        name=name,
+                    source.contracts[ralph_name] = Contract(
+                        name=ralph_name,
                         abstract=spec.get("abstract", False),
                         hidden=True,
                         fields_immutable=[Field(**f) for f in spec.get("fields_immutable", [])],

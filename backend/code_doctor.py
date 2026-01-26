@@ -175,7 +175,8 @@ class CodeDoctor:
         # and the decision depends on the body, we need to parse the function first.
         
         # Let's find all function starts.
-        func_pattern = re.compile(r'((?:@using\([^)]+\)\s*)?)(pub\s+)?fn\s+(\w+)\s*\(([^)]*)\)\s*(?:->\s*[^{]+)?\s*\{')
+        # Use multiline mode with line-start anchor to avoid matching inside comments
+        func_pattern = re.compile(r'^[ \t]*((?:@using\([^)]+\)\s*)?)(pub\s+)?fn\s+(\w+)\s*\(([^)]*)\)\s*(?:->\s*[^{]+)?\s*\{', re.MULTILINE)
         
         # We'll iterate through matches, find the matching closing brace for the body,
         # analyze the body, and reconstruct the function header.
@@ -189,10 +190,18 @@ class CodeDoctor:
         for match in func_pattern.finditer(code):
             start_pos = match.start()
             
+            # Check if this line is commented out (starts with //)
+            line_start_check = code.rfind('\n', 0, start_pos) + 1
+            line_prefix = code[line_start_check:start_pos].lstrip()
+            if line_prefix.startswith('//'):
+                # Skip commented-out function definitions
+                continue
+            
             full_header = match.group(0)
+            # Group 0 now includes leading whitespace, strip it for the header
+            full_header_stripped = full_header.lstrip()
             existing_annotation = match.group(1)
             is_public = bool(match.group(2))
-            func_name = match.group(3)
             params = match.group(4)
             
             # Find body end with safe brace counting
@@ -200,9 +209,9 @@ class CodeDoctor:
             body_end = self.find_matching_brace(code, body_start - 1)
             
             if body_end == -1:
-                # Error finding brace, just append rest
-                new_code += code[last_pos:]
-                return new_code
+                # Error finding brace, skip this match and continue processing
+                # This prevents a single malformed match from aborting the entire pass
+                continue
             
             body_content = code[body_start:body_end-1]
             
@@ -222,15 +231,7 @@ class CodeDoctor:
             # Construct new annotation
             new_annotation = self.construct_annotation(analysis, existing_annotation, is_public)
             
-            # Determine indentation by looking at the line start of the function (not annotation)
-            # Find where the actual fn keyword starts
-            fn_pos = match.start(2) if match.group(2) else match.start(3) - 3  # "fn " is 3 chars before func name
-            if existing_annotation:
-                # The fn keyword position is after the annotation
-                fn_match = re.search(r'(pub\s+)?fn\s+', full_header)
-                if fn_match:
-                    fn_pos = start_pos + len(existing_annotation) + fn_match.start()
-            
+            # Determine indentation by looking at the line start of the function
             line_start = code.rfind('\n', 0, start_pos) + 1
             indent = ""
             for c in code[line_start:]:
@@ -244,9 +245,9 @@ class CodeDoctor:
             
             # Reconstruct header
             # Remove existing annotation from header if it was captured
-            header_without_annotation = full_header
+            header_without_annotation = full_header_stripped
             if existing_annotation:
-                header_without_annotation = full_header[len(existing_annotation):].lstrip()
+                header_without_annotation = full_header_stripped[len(existing_annotation):].lstrip()
             
             if new_annotation:
                 new_code += f"{indent}{new_annotation}\n{indent}{header_without_annotation}"

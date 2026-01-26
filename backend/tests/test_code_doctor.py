@@ -1,4 +1,3 @@
-import pytest
 from code_doctor import fix_common_errors
 
 
@@ -494,7 +493,7 @@ Contract Second(mut count: U256) {
     return totalSupply()
   }"""
         expected = """\
-  @using(preapprovedAssets = true, checkExternalCaller = false)
+  @using(preapprovedAssets = true, updateFields = true, checkExternalCaller = false)
   pub fn mint(uri: ByteVec) -> ByteVec {
     let caller = callerAddress!()
     tokenURIs.insert!(caller, index, uri)
@@ -506,5 +505,5 @@ Contract Second(mut count: U256) {
   }"""
         result = fix_common_errors(code, mappings={'tokenURIs'})
         
-        # Should add updateFields annotation since it modifies mutable fields
-        assert result == code
+        # Should add updateFields and checkExternalCaller=false since it modifies mappings and is public
+        assert result == expected

@@ -501,6 +501,8 @@ class CodeDoctor:
             current_props.get('assetsInContract') != 'true' and
             analysis.get('hasTransferTokenToSelf', False)):
             current_props['payToContractOnly'] = 'true'
+        elif 'payToContractOnly' in current_props:
+            del current_props['payToContractOnly']
             
         # Rule 5 & 6: checkExternalCaller
         # If (assetsInContract or updateFields or preapprovedAssets) and doesn't contain checkCaller! statement it MUST have checkExternalCaller = false.

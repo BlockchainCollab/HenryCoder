@@ -252,8 +252,8 @@ Tests the condition or checks invariants.
 fn checkCaller!(condition: Bool, errorCode: U256) -> ()
 ```
 
-Checks the validity of function parameters. Prefer this over assert! in public functions.
-The effects of this function are the same as assert!.
+Checks that the external caller satisfies the required conditions (for example, access-control or caller-identity checks) in public functions. Prefer this over assert! when validating the caller.
+Semantically, this behaves like assert!: if the condition is false, the execution reverts with the given error code.
 
 > @param **condition** *the condition to be checked*
 >

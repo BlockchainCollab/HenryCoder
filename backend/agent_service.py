@@ -988,7 +988,7 @@ class ChatAgent:
             final_output = ""
             
             # Retry configuration
-            max_retries = 1
+            max_retries = 3
             retry_count = 0
             last_error = None
             
@@ -1120,9 +1120,9 @@ Your task is to fix Ralph code that has compilation errors.
 ## CRITICAL RULES - VIOLATION WILL CAUSE FAILURE:
 1. Analyze the error message and fix ONLY the specific syntax/compilation error mentioned
 2. You MUST keep ALL existing code - every function, every field, every event, every line
-3. NEVER delete or simplify code - only modify the specific broken syntax
-4. NEVER return a shorter or simpler version of the contract
-5. Return ONLY the complete fixed Ralph code with ALL original functionality preserved
+3. NEVER simplify code - only modify the specific broken syntax
+4. ONLY delete if the warning/error is "unused *something*"
+5. NEVER return a shorter or simpler version of the contract
 6. Do NOT include any explanation, markdown, or comments about what you changed
 7. Do NOT wrap the code in ```ralph``` blocks
 """

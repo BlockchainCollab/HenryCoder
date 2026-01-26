@@ -74,3 +74,21 @@ If the `.env` file is not present, or these variables are not set, the server wi
 ```bash
 deactivate
 ```
+
+## OZ JSON creation prompt
+```
+For each contract found in backend/openzeppelin/contracts
+
+I'll need you to create a .json file containing the contract's spec (fields, parents, type)
+
+ex. ERC20.ral should have it's JSON ERC20.ral.json which will contain:
+[
+    {
+        type: "contract",
+        name: "FungibleToken"
+        fields_immutable: []Field
+        fields_mutable: []Field
+    }
+]
+
+You can find structure of field in agent_service.py

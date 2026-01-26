@@ -1,5 +1,5 @@
 import pytest
-from code_doctor import CodeDoctor, fix_common_errors
+from code_doctor import fix_common_errors
 
 
 class TestEnumFixes:

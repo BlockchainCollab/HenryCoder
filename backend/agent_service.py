@@ -692,6 +692,11 @@ def addMapsToContract(contractName: str, maps: List[Dict[str, Any]]) -> str:
         if not key_type or not value_type:
             continue
         
+        # Validate key_type is one of the allowed types
+        allowed_key_types = {'Bool', 'U256', 'I256', 'Address', 'ByteVec'}
+        if key_type not in allowed_key_types:
+            return f"Error: key_type '{key_type}' for map '{m_name}' must be one of: {', '.join(sorted(allowed_key_types))}."
+        
         # Validate value_type is not a mapping (nested mappings not allowed in Ralph)
         if 'mapping' in value_type.lower():
             return f"Error: Nested mappings are not allowed in Ralph. Map '{m_name}' has a mapping as value_type."

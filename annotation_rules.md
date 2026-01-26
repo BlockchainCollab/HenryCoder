@@ -1,4 +1,4 @@
-# @using anootation run-down
+# @using annotation run-down
 ## Rules
 1. If the function contains tokenRemaining with selfAddress!() as parameter, it MUST have @using(assetsInContract = true) annotation.
 2. If the function contains transferTokenFromSelf!, it MUST have @using(assetsInContract = true) annotation.

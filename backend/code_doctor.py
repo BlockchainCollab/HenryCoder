@@ -410,7 +410,7 @@ class CodeDoctor:
         if re.search(r'createSubContract!\s*\{', clean_body):
             flags['preapprovedAssets'] = True
             
-        # Rule 7: insert!
+        # Rule 7: insert! requires preapprovedAssets
         if 'insert!' in clean_body:
             flags['preapprovedAssets'] = True
             flags['hasInsert'] = True
@@ -436,10 +436,23 @@ class CodeDoctor:
                             flags['updateFields'] = True
                             break
         
-        # Mapping assignments only require updateFields at MAIN SCOPE
+        # Mapping modifications only require updateFields at MAIN SCOPE
         for mapping_name in mappings:
             # Check for assignment: mapping[...] = ...
             if self.has_assignment_at_main_scope(clean_body, rf'\b{mapping_name}\s*\[.*?\]\s*=[^=]'):
+                flags['updateFields'] = True
+            # Check for mapping.insert!(...) - modifies mapping state
+            if self.has_assignment_at_main_scope(clean_body, rf'\b{mapping_name}\.insert!\s*\('):
+                flags['updateFields'] = True
+            # Check for mapping.remove!(...) - modifies mapping state
+            if self.has_assignment_at_main_scope(clean_body, rf'\b{mapping_name}\.remove!\s*\('):
+                flags['updateFields'] = True
+        
+        # If no contract context, check for any .insert!() or .remove!() calls on unknown mappings at main scope
+        if not mappings:
+            if self.has_assignment_at_main_scope(clean_body, r'\w+\.insert!\s*\('):
+                flags['updateFields'] = True
+            if self.has_assignment_at_main_scope(clean_body, r'\w+\.remove!\s*\('):
                 flags['updateFields'] = True
                 
         # Check for checkCaller!

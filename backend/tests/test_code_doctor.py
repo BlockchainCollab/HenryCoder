@@ -479,3 +479,32 @@ Contract Second(mut count: U256) {
         # Should add updateFields annotation since it modifies mutable fields
         assert "@using(updateFields = true)" in result, "Should detect field assignments in multiline contract parameters"
         assert "fn setDefaultRoyalty" in result
+
+    def test_indentation(self):
+        """Test that mutable field assignments are detected in contracts with multiline parameters."""
+        code = """\
+  @using(preapprovedAssets = true)
+  pub fn mint(uri: ByteVec) -> ByteVec {
+    let caller = callerAddress!()
+    tokenURIs.insert!(caller, index, uri)
+  }
+ 
+
+  pub fn getTotalSupply() -> U256 {
+    return totalSupply()
+  }"""
+        expected = """\
+  @using(preapprovedAssets = true, checkExternalCaller = false)
+  pub fn mint(uri: ByteVec) -> ByteVec {
+    let caller = callerAddress!()
+    tokenURIs.insert!(caller, index, uri)
+  }
+ 
+
+  pub fn getTotalSupply() -> U256 {
+    return totalSupply()
+  }"""
+        result = fix_common_errors(code, mappings={'tokenURIs'})
+        
+        # Should add updateFields annotation since it modifies mutable fields
+        assert result == code

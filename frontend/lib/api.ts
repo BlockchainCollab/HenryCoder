@@ -22,6 +22,7 @@ type AgentChunk =
   | { type: "tool_end"; data: ToolEndData }
   | { type: "content"; data: string }
   | { type: "translation_chunk"; data: string }
+  | { type: "reasoning_chunk"; data: string }
   | { type: "code_snapshot"; data: string }
   | { type: "error"; data: { message: string } };
 
@@ -51,6 +52,7 @@ export async function translateCode({
   setErrors,
   onToolStart,
   onToolEnd,
+  onReasoningChunk,
 }: {
   sourceCode: string;
   options: any;
@@ -62,6 +64,7 @@ export async function translateCode({
   setErrors: (val: string[]) => void;
   onToolStart?: (tool: string, input: string, run_id?: string) => void;
   onToolEnd?: (tool: string, success: boolean, run_id?: string) => void;
+  onReasoningChunk?: (chunk: string) => void;
 }) {
   const sessionId = ref<string>(crypto.randomUUID());
   setOutputCode(initialOutputCode);
@@ -137,6 +140,11 @@ export async function translateCode({
               // Stream the translation chunk directly to the output
               streamedTranslationCode += chunk.data;
               setOutputCode(streamedTranslationCode);
+            }
+
+            // Handle reasoning chunks (from thinking models like Gemini)
+            if (chunk.type === "reasoning_chunk") {
+              onReasoningChunk?.(chunk.data);
             }
             
             // Handle full code snapshots from agent V2

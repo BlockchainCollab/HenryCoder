@@ -550,6 +550,10 @@ async def translateFunctions(interfaceOrContractName: str) -> str:
             is_smart = session_opts.get("smart", False)
 
             async for chunk, reasoning, warnings, errors in perform_fim_translation(solidity_code, ralph_structure, smart=is_smart):
+                if reasoning:
+                    # Stream reasoning to keep connection alive during "thinking" phase
+                    if queue:
+                        await queue.put({"type": "reasoning_chunk", "data": reasoning})
                 if chunk:
                     full_content += chunk
                     if queue:
@@ -866,6 +870,10 @@ class StreamEvent:
     @staticmethod
     def translation_chunk(chunk: str) -> Dict[str, Any]:
         return {"type": "translation_chunk", "data": chunk}
+
+    @staticmethod
+    def reasoning_chunk(chunk: str) -> Dict[str, Any]:
+        return {"type": "reasoning_chunk", "data": chunk}
 
     @staticmethod
     def stage(stage: AgentStage, message: str = "") -> Dict[str, Any]:

@@ -712,6 +712,7 @@ const errors = ref<string[]>([]);
 const warnings = ref<string[]>([]);
 const successMessage = ref<string | null>(null);
 const currentProgressStep = ref(1);
+const reasoningContent = ref("");
 const options = ref({
   // translation options
   optimize: false,
@@ -736,9 +737,13 @@ const outputContainer = ref<HTMLElement | null>(null);
 const currentActivity = computed(() => {
   if (activeTools.value.length > 0) {
     const tool = activeTools.value[activeTools.value.length - 1];
+    // Show thinking indicator for translateFunctions when reasoning is being received
+    if (tool?.name === 'translateFunctions' && reasoningContent.value) {
+      return `translateFunctions - Thinking... (${reasoningContent.value.length} chars)`;
+    }
     // Shorten input if too long
-    const input = tool.input.length > 40 ? tool.input.substring(0, 40) + '...' : tool.input;
-    return `${tool.name} (${input})`;
+    const input = tool?.input?.length > 40 ? tool.input.substring(0, 40) + '...' : tool?.input || '';
+    return `${tool?.name} (${input})`;
   }
   return loadingStatus.value;
 });
@@ -872,6 +877,7 @@ const translateCodeInner = async (
   successMessage.value = null;
   progressMinimized.value = false;
   currentProgressStep.value = 1;
+  reasoningContent.value = "";
   await apiTranslateCode({
     sourceCode: sourceCode.value,
     options: options.value,
@@ -881,6 +887,9 @@ const translateCodeInner = async (
     setOutputCode: (val: string) => (outputCode.value = val),
     setLoadingStatus: (val: string) => (loadingStatus.value = val),
     setErrors: (val: string[]) => (errors.value = val),
+    onReasoningChunk: (chunk: string) => {
+      reasoningContent.value += chunk;
+    },
     onToolStart: (tool: string, input: string, run_id?: string) => {
       const id = run_id || `${tool}-${Date.now()}-${Math.random()}`;
       activeTools.value.push({ id, name: tool, input });

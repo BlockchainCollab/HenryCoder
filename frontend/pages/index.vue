@@ -713,6 +713,7 @@ const warnings = ref<string[]>([]);
 const successMessage = ref<string | null>(null);
 const currentProgressStep = ref(1);
 const reasoningContent = ref("");
+const isThinking = ref(false);
 const options = ref({
   // translation options
   optimize: false,
@@ -737,9 +738,9 @@ const outputContainer = ref<HTMLElement | null>(null);
 const currentActivity = computed(() => {
   if (activeTools.value.length > 0) {
     const tool = activeTools.value[activeTools.value.length - 1];
-    // Show thinking indicator for translateFunctions when reasoning is being received
-    if (tool?.name === 'translateFunctions' && reasoningContent.value) {
-      return `translateFunctions - Thinking... (${reasoningContent.value.length} chars)`;
+    // Show thinking indicator for translateFunctions when reasoning is being received (but not after content starts)
+    if (tool?.name === 'translateFunctions' && isThinking.value) {
+      return `Thinking... (${reasoningContent.value.length} chars)`;
     }
     // Shorten input if too long
     const input = tool?.input?.length > 40 ? tool.input.substring(0, 40) + '...' : tool?.input || '';
@@ -878,17 +879,25 @@ const translateCodeInner = async (
   progressMinimized.value = false;
   currentProgressStep.value = 1;
   reasoningContent.value = "";
+  isThinking.value = false;
   await apiTranslateCode({
     sourceCode: sourceCode.value,
     options: options.value,
     runtimeConfig,
     previousTranslation,
     initialOutputCode,
-    setOutputCode: (val: string) => (outputCode.value = val),
+    setOutputCode: (val: string) => {
+      outputCode.value = val;
+      // Once content starts coming in, we're no longer in "thinking" mode
+      if (val && val !== initialOutputCode) {
+        isThinking.value = false;
+      }
+    },
     setLoadingStatus: (val: string) => (loadingStatus.value = val),
     setErrors: (val: string[]) => (errors.value = val),
     onReasoningChunk: (chunk: string) => {
       reasoningContent.value += chunk;
+      isThinking.value = true;
     },
     onToolStart: (tool: string, input: string, run_id?: string) => {
       const id = run_id || `${tool}-${Date.now()}-${Math.random()}`;

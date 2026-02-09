@@ -92,6 +92,44 @@ Health check endpoint
 }
 ```
 
+**cURL Examples**:
+```bash
+# HTTP
+curl http://127.0.0.1:8000/api/health
+
+# HTTPS with SSL certificate check ignored (use -k flag for self-signed certificates)
+curl -k https://127.0.0.1:8000/api/health
+```
+
+### Example Usage with cURL
+
+**Testing the translation endpoint**:
+```bash
+# HTTP
+curl -X POST http://127.0.0.1:8000/api/translate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_code": "pragma solidity ^0.8.0;\ncontract SimpleStorage {\n    uint256 public storedData;\n    function set(uint256 x) public {\n        storedData = x;\n    }\n}",
+    "options": {
+      "optimize": false,
+      "include_comments": true
+    }
+  }'
+
+# HTTPS with SSL certificate check ignored (use -k flag for self-signed certificates)
+curl -k -X POST https://127.0.0.1:8000/api/translate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_code": "pragma solidity ^0.8.0;\ncontract SimpleStorage {\n    uint256 public storedData;\n    function set(uint256 x) public {\n        storedData = x;\n    }\n}",
+    "options": {
+      "optimize": false,
+      "include_comments": true
+    }
+  }'
+```
+
+**Note**: The `-k` (or `--insecure`) flag tells cURL to ignore SSL certificate verification. This is useful for development/testing with self-signed certificates but should not be used in production environments.
+
 ## Data Flow
 
 1. User uploads or inputs EVM contract on the frontend

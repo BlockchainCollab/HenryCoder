@@ -70,6 +70,46 @@ If the `.env` file is not present, or these variables are not set, the server wi
     -   Interactive API documentation (Swagger UI) is available at `http://<HOST>:<PORT>/docs`.
     -   Alternative API documentation (ReDoc) is available at `http://<HOST>:<PORT>/redoc`.
 
+## cURL Examples
+
+You can test the API using cURL commands. If you're accessing an HTTPS endpoint with a self-signed certificate, use the `-k` flag to ignore SSL certificate checks.
+
+**Health Check:**
+```bash
+# HTTP
+curl http://127.0.0.1:8000/api/health
+
+# HTTPS with SSL certificate check ignored
+curl -k https://127.0.0.1:8000/api/health
+```
+
+**Translation:**
+```bash
+# HTTP
+curl -X POST http://127.0.0.1:8000/api/translate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_code": "pragma solidity ^0.8.0;\ncontract SimpleStorage {\n    uint256 public storedData;\n    function set(uint256 x) public {\n        storedData = x;\n    }\n}",
+    "options": {
+      "optimize": false,
+      "include_comments": true
+    }
+  }'
+
+# HTTPS with SSL certificate check ignored
+curl -k -X POST https://127.0.0.1:8000/api/translate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_code": "pragma solidity ^0.8.0;\ncontract SimpleStorage {\n    uint256 public storedData;\n    function set(uint256 x) public {\n        storedData = x;\n    }\n}",
+    "options": {
+      "optimize": false,
+      "include_comments": true
+    }
+  }'
+```
+
+**Note:** The `-k` flag bypasses SSL certificate validation. Use this only for development/testing with self-signed certificates. In production, ensure you have valid SSL certificates.
+
 ## To Deactivate the Virtual Environment (when done):
 ```bash
 deactivate

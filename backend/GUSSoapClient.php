@@ -77,7 +77,9 @@ class GUSSoapClient
         curl_close($ch);
         
         if ($httpCode >= 400) {
-            throw new Exception("SOAP service returned HTTP error " . $httpCode . " for endpoint: " . $this->endpoint);
+            // Log detailed error internally but provide generic message
+            error_log("SOAP service returned HTTP error " . $httpCode . " for endpoint: " . $this->endpoint);
+            throw new Exception("SOAP service returned HTTP error " . $httpCode);
         }
         
         return $response;
@@ -138,7 +140,8 @@ class GUSSoapClient
         // Disable external entity loading to prevent XXE attacks
         libxml_disable_entity_loader(true);
         
-        $xml = simplexml_load_string($response, 'SimpleXMLElement', LIBXML_NOENT | LIBXML_DTDLOAD | LIBXML_DTDATTR);
+        // Parse without XXE-vulnerable flags
+        $xml = simplexml_load_string($response, 'SimpleXMLElement', LIBXML_NOCDATA);
         if ($xml === false) {
             throw new Exception("Failed to parse SOAP response");
         }

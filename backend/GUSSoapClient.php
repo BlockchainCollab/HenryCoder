@@ -3,6 +3,13 @@
 /**
  * GUS SOAP Client
  * A simple SOAP client that uses curl with SSL verification disabled (-k flag)
+ * 
+ * SECURITY WARNING:
+ * This client disables SSL certificate verification (CURLOPT_SSL_VERIFYPEER = false).
+ * This makes the connection vulnerable to man-in-the-middle attacks.
+ * This should only be used in development/testing environments or when connecting
+ * to services with self-signed certificates in a trusted network.
+ * For production use, enable SSL verification and configure proper CA certificates.
  */
 class GUSSoapClient
 {
@@ -58,9 +65,11 @@ class GUSSoapClient
         
         // Check for errors
         if (curl_errno($ch)) {
-            $error = curl_error($ch);
+            $errorCode = curl_errno($ch);
             curl_close($ch);
-            throw new Exception("Curl error: " . $error);
+            // Log detailed error internally but provide generic message
+            error_log("Curl error " . $errorCode . " while calling " . $this->endpoint);
+            throw new Exception("Failed to communicate with SOAP service");
         }
         
         // Get HTTP status code
@@ -68,7 +77,7 @@ class GUSSoapClient
         curl_close($ch);
         
         if ($httpCode >= 400) {
-            throw new Exception("HTTP error: " . $httpCode);
+            throw new Exception("SOAP service returned HTTP error " . $httpCode . " for endpoint: " . $this->endpoint);
         }
         
         return $response;
@@ -105,13 +114,13 @@ class GUSSoapClient
         $xml = '<?xml version="1.0" encoding="utf-8"?>';
         $xml .= '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">';
         $xml .= '<soap:Body>';
-        $xml .= '<' . $method . '>';
+        $xml .= '<' . htmlspecialchars($method) . '>';
         
         foreach ($params as $key => $value) {
-            $xml .= '<' . $key . '>' . htmlspecialchars($value) . '</' . $key . '>';
+            $xml .= '<' . htmlspecialchars($key) . '>' . htmlspecialchars($value) . '</' . htmlspecialchars($key) . '>';
         }
         
-        $xml .= '</' . $method . '>';
+        $xml .= '</' . htmlspecialchars($method) . '>';
         $xml .= '</soap:Body>';
         $xml .= '</soap:Envelope>';
         
@@ -126,7 +135,10 @@ class GUSSoapClient
      */
     private function parseResponse($response)
     {
-        $xml = simplexml_load_string($response);
+        // Disable external entity loading to prevent XXE attacks
+        libxml_disable_entity_loader(true);
+        
+        $xml = simplexml_load_string($response, 'SimpleXMLElement', LIBXML_NOENT | LIBXML_DTDLOAD | LIBXML_DTDATTR);
         if ($xml === false) {
             throw new Exception("Failed to parse SOAP response");
         }

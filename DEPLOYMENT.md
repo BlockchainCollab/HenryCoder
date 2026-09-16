@@ -11,6 +11,10 @@ and generate the Traefik routing labels.
 4. In the generated service domain fields, set:
    - `frontend`: `https://henrycoder.com:3000`
    - `backend`: `https://henrycoder.com:8000/api`
+   Disable **Strip Prefixes** so the backend receives the `/api` path.
+   Compose explicitly exposes frontend port `3000` and backend port `8000`;
+   these match their Dockerfiles, listeners, and health checks. The ports in
+   the domain fields select internal container ports; public HTTPS uses `443`.
 5. Leave Coolify's default Traefik proxy configuration and generated labels in
    place. Do not enable Raw Compose Deployment and do not publish host ports.
 6. In **Configuration > Environment Variables**, enter the values marked as

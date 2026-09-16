@@ -5,6 +5,8 @@ services:
       args:
         NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-/api}
         NUXT_PUBLIC_ALEPHIUM_NODE_URL: ${NUXT_PUBLIC_ALEPHIUM_NODE_URL:-https://node.testnet.alephium.org}
+    expose:
+      - "3000"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/"]
       interval: 60s
@@ -18,6 +20,8 @@ services:
   backend:
     build:
       context: ./backend
+    expose:
+      - "8000"
     environment:
       HOST: 0.0.0.0
       PORT: 8000

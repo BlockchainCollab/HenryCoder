@@ -27,10 +27,16 @@ load_dotenv()
 
 app = FastAPI()
 
-# Add CORS middleware to allow all origins
+# Allow the frontend origins; deployments can override the comma-separated list.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS", "https://henrycoder.com,https://www.henrycoder.com"
+        ).split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Explicitly list all allowed methods
     allow_headers=["Content-Type", "Authorization", "Accept"],  # Explicitly list all allowed headers
@@ -410,4 +416,3 @@ async def fix_code(request: FixCodeRequest):
             yield json.dumps(error_event) + "\n"
     
     return StreamingResponse(fix_generator(), media_type="application/x-ndjson")
-

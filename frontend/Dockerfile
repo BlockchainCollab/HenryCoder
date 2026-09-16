@@ -7,7 +7,7 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
-ARG NUXT_PUBLIC_API_BASE=/api
+ARG NUXT_PUBLIC_API_BASE=https://api.henrycoder.com/api
 ARG NUXT_PUBLIC_ALEPHIUM_NODE_URL=https://node.testnet.alephium.org
 
 RUN bun run generate

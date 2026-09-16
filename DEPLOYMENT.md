@@ -4,14 +4,15 @@ This Compose file is for a **Docker Compose Application** in Coolify, with
 **Raw Compose Deployment disabled**. Coolify will create its private network
 and generate the Traefik routing labels.
 
-1. Point the `A`/`AAAA` records for `henrycoder.com` to the Coolify server.
+1. Point the `A`/`AAAA` records for `henrycoder.com` and `api.henrycoder.com`
+   to the Coolify server. Add matching records for `www.henrycoder.com` if used.
 2. Stop the old host Nginx/Certbot site so Coolify can bind ports 80 and 443.
 3. Deploy this repository as a Docker Compose Application using
    `docker-compose.yml`.
 4. In the generated service domain fields, set:
    - `frontend`: `https://henrycoder.com:3000`
-   - `backend`: `https://henrycoder.com:8000/api`
-   Disable **Strip Prefixes** so the backend receives the `/api` path.
+   - `backend`: `https://api.henrycoder.com:8000`
+   The backend domain has no path prefix. Python keeps its `/api` routes.
    Compose explicitly exposes frontend port `3000` and backend port `8000`;
    these match their Dockerfiles, listeners, and health checks. The ports in
    the domain fields select internal container ports; public HTTPS uses `443`.
@@ -23,7 +24,14 @@ and generate the Traefik routing labels.
    `NODE_URL`, `LOG_LEVEL`, `NUXT_PUBLIC_API_BASE`, and
    `NUXT_PUBLIC_ALEPHIUM_NODE_URL`.
 
-The frontend uses the same-origin `/api` base URL. The backend returns
+Set the frontend build variable `NUXT_PUBLIC_API_BASE` to
+`https://api.henrycoder.com/api`, replacing any existing `/api` override.
+The backend's comma-separated `CORS_ORIGINS` defaults to
+`https://henrycoder.com,https://www.henrycoder.com` and allows the browser's
+JSON POST preflight requests. Rebuild and redeploy both services after these
+changes. Check `https://api.henrycoder.com/api/health` for HTTP 200.
+
+The backend returns
 newline-delimited streaming responses, and Traefik forwards recognized streams
 without response buffering. `X-Accel-Buffering` is harmless but is only
 interpreted by Nginx; no Traefik proxy change is required.
@@ -54,5 +62,5 @@ not automatically merge the per-service `.env` files.
 
 For an explicit end-to-end check after deployment, open the application and
 start a long chat/translation. Browser DevTools should show a `200` streamed
-response from `/api/chat/stream` and incremental NDJSON chunks before the
+response from `https://api.henrycoder.com/api/chat/stream` and incremental NDJSON chunks before the
 request completes.

@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
       args:
-        NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-/api}
+        NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-https://api.henrycoder.com/api}
         NUXT_PUBLIC_ALEPHIUM_NODE_URL: ${NUXT_PUBLIC_ALEPHIUM_NODE_URL:-https://node.testnet.alephium.org}
     expose:
       - "3000"
@@ -25,6 +25,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8000
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://henrycoder.com,https://www.henrycoder.com}
       API_KEY: ${API_KEY:?}
       API_URL: ${API_URL:-https://openrouter.ai/api/v1}
       LLM_MODEL: ${LLM_MODEL:-deepseek/deepseek-v4.1-flash}

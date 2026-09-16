@@ -1,17 +1,22 @@
-FROM node:24-slim
+FROM oven/bun:1 AS build
 
-# Set the working directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
-COPY package.json package-lock.json ./
-RUN npm install
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
-# Copy the rest of the application code
 COPY . .
 
-# Expose the port the app runs on
-EXPOSE 8088
+ARG NUXT_PUBLIC_API_BASE=/api
+ARG NUXT_PUBLIC_ALEPHIUM_NODE_URL=https://node.testnet.alephium.org
 
-# Command to run the application
-CMD ["npm", "run", "dev"]
+RUN bun run generate
+
+FROM nginx:stable-alpine-slim
+
+EXPOSE 3000
+
+COPY --from=build /app/.output/public /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+CMD ["nginx", "-g", "daemon off;"]

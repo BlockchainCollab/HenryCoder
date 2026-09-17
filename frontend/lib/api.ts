@@ -66,17 +66,17 @@ export async function translateCode({
   onToolEnd?: (tool: string, success: boolean, run_id?: string) => void;
   onReasoningChunk?: (chunk: string) => void;
 }) {
-  const sessionId = ref<string>(crypto.randomUUID());
+  const sessionId = crypto.randomUUID();
   setOutputCode(initialOutputCode);
   setErrors([]);
   setLoadingStatus("");
 
   let streamedTranslationCode = initialOutputCode;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 300000); // Includes reading the stream.
+
   try {
-    // Create AbortController for timeout handling
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
 
     const response = await fetch(
       `${runtimeConfig.public.apiBase}/chat/stream`,
@@ -87,7 +87,7 @@ export async function translateCode({
         },
         body: JSON.stringify({
           message: sourceCode,
-          session_id: sessionId.value,
+          session_id: sessionId,
           options: {
             optimize: options.optimize,
             include_comments: options.includeComments,
@@ -100,8 +100,6 @@ export async function translateCode({
       }
     );
 
-    clearTimeout(timeoutId);
-
     if (!response.ok || !response.body) {
       const errorData = await response
         .json()
@@ -111,68 +109,61 @@ export async function translateCode({
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let done = false;
     let buffer = "";
-    let errorsArr: string[] = [];
+    let completed = false;
+    const errorsArr: string[] = [];
 
-    while (!done) {
-      const { value, done: streamDone } = await reader.read();
-      done = streamDone;
-
-      if (value) {
-        buffer += decoder.decode(value, { stream: true });
-        let lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-
-          try {
-            const chunk = JSON.parse(line) as AgentChunk;
-
-            // Handle stage updates for progress indicator
-            if (chunk.type === "stage") {
-              setLoadingStatus(chunk.data.message);
-            }
-
-            // Handle translation chunks - streamed directly from translator
-            if (chunk.type === "translation_chunk") {
-              // Stream the translation chunk directly to the output
-              streamedTranslationCode += chunk.data;
-              setOutputCode(streamedTranslationCode);
-            }
-
-            // Handle reasoning chunks (from thinking models like Gemini)
-            if (chunk.type === "reasoning_chunk") {
-              onReasoningChunk?.(chunk.data);
-            }
-            
-            // Handle full code snapshots from agent V2
-            if (chunk.type === "code_snapshot") {
-              streamedTranslationCode = chunk.data;
-              setOutputCode(streamedTranslationCode);
-            }
-
-            // Handle tool execution (for future agentic view)
-            if (chunk.type === "tool_start") {
-              console.log(`[Agent Tool Start] ${chunk.data.tool} ${chunk.data.run_id}:`, chunk.data.input);
-              onToolStart?.(chunk.data.tool, chunk.data.input, chunk.data.run_id);
-            }
-            if (chunk.type === "tool_end") {
-              console.log(`[Agent Tool End] ${chunk.data.tool} ${chunk.data.run_id}`);
-              onToolEnd?.(chunk.data.tool, chunk.data.success, chunk.data.run_id);
-            }
-
-            // Handle errors from backend
-            if (chunk.type === "error") {
-              const errorMsg = chunk.data?.message || "Unknown error";
-              errorsArr.push(errorMsg);
-            }
-          } catch (e) {
-            // Ignore JSON parse errors for incomplete lines
-          }
-        }
+    const processLine = (line: string) => {
+      if (!line.trim()) return;
+      let chunk: AgentChunk;
+      try {
+        chunk = JSON.parse(line) as AgentChunk;
+      } catch {
+        throw new Error("Received an invalid event from the translation server.");
       }
+
+      if (chunk.type === "stage") {
+        completed = completed || chunk.data.stage === "done";
+        setLoadingStatus(chunk.data.message);
+      } else if (chunk.type === "translation_chunk") {
+        streamedTranslationCode += chunk.data;
+        setOutputCode(streamedTranslationCode);
+      } else if (chunk.type === "code_snapshot") {
+        streamedTranslationCode = chunk.data;
+        setOutputCode(streamedTranslationCode);
+      } else if (chunk.type === "reasoning_chunk") {
+        onReasoningChunk?.(chunk.data);
+      } else if (chunk.type === "tool_start") {
+        onToolStart?.(chunk.data.tool, chunk.data.input, chunk.data.run_id);
+      } else if (chunk.type === "tool_end") {
+        onToolEnd?.(chunk.data.tool, chunk.data.success, chunk.data.run_id);
+      } else if (chunk.type === "error") {
+        errorsArr.push(chunk.data?.message || "Unknown translation error");
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) processLine(line);
+      if (done) {
+        processLine(buffer);
+        break;
+      }
+    }
+
+    if (errorsArr.length) {
+      setErrors(errorsArr);
+      setLoadingStatus("");
+      return;
+    }
+    if (!completed) {
+      throw new Error("The translation stream ended before completion. Any partial code is preserved.");
+    }
+    if (!streamedTranslationCode.trim() || streamedTranslationCode === initialOutputCode) {
+      throw new Error("The translation finished without generating translated code. Please try again.");
     }
 
     // Clean up any markdown artifacts from the final output
@@ -207,6 +198,8 @@ export async function translateCode({
     
     setErrors([errorMessage]);
     setLoadingStatus("");
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
